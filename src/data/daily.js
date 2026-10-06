@@ -1,7 +1,7 @@
 // 일일/주간 도전: 날짜 시드 기반 결정적 생성 (같은 날 모두 같은 도전).
 // 싱글모드에서만 정산 (멀티플레이어는 바닐라).
 
-import { mondayOf } from './league.js?v=1791281681';
+import { mondayOf } from './league.js?v=1791282537';
 
 const GAHO = [
   { key: 'monster', name: '천둥' },
@@ -11,7 +11,7 @@ const GAHO = [
   { key: 'quick', name: '태양' },
 ];
 
-const HEROES = ['다이달로스', '아가멤논', '파트로클로스', '네스토르'];
+const HEROES = ['오디세우스', '헤라클레스', '아킬레우스', '페르세우스'];
 
 function hashStr(s) {
   let h = 0;

@@ -1,11 +1,11 @@
 // Multiplayer session: owns the NetRoom, the lockstep protocol flow, and the
 // multiplayer controller. main.js only renders `session` state and forwards taps.
 
-import { CARDS } from '../data/cards.js?v=1791281681';
-import { createController } from '../ui/controller.js?v=1791281681';
-import { NetRoom } from './webrtc.js?v=1791281681';
-import { PeerRoom } from './peerroom.js?v=1791281681';
-import { MSG, makeMsg, stateHash } from './protocol.js?v=1791281681';
+import { CARDS } from '../data/cards.js?v=1791282537';
+import { createController } from '../ui/controller.js?v=1791282537';
+import { NetRoom } from './webrtc.js?v=1791282537';
+import { PeerRoom } from './peerroom.js?v=1791282537';
+import { MSG, makeMsg, stateHash } from './protocol.js?v=1791282537';
 
 const MAX_PLAYERS = 4;
 
@@ -152,7 +152,7 @@ export class NetSession {
 
   // AI seat names: trainer names not taken by humans.
   pickAiNames() {
-    const pool = ['다이달로스', '아가멤논', '파트로클로스', '네스토르'].filter((n) => !this.names.includes(n));
+    const pool = ['오디세우스', '헤라클레스', '아킬레우스', '페르세우스'].filter((n) => !this.names.includes(n));
     const out = [];
     for (let i = 0; i < this.aiCount; i++) out.push(pool[i] || `AI ${i + 1}`);
     return out;

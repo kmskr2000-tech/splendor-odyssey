@@ -545,3 +545,9 @@ button.orsv:hover { border-color: #4ade80; }
 }
 .metarow b { color: #4ade80; }
 .difflabel small { display: block; font-size: 9px; color: var(--muted); margin-top: 2px; }
+
+/* 승급전 보스: 금테두리 + 광채 */
+.tface.bossface { border-color: #ffd700; box-shadow: 0 0 8px #ffd700, 0 0 16px rgba(255, 215, 0, .5); }
+.promobanner { background: linear-gradient(135deg, #3a1c1c, #1e1e2a); border: 2px solid #ffd700; border-radius: 10px; padding: 10px 12px; margin: 10px 0; font-size: 16px; font-weight: bold; color: #ffd700; text-align: center; box-shadow: 0 0 12px rgba(255, 215, 0, .35); }
+.promobanner small { display: block; font-size: 12px; font-weight: normal; color: #f0d9a0; margin-top: 4px; }
+.promo-hint { color: #ffd700; font-weight: bold; }

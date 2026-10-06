@@ -105,7 +105,7 @@ export function loadSave(storage, cards) {
 
 const defaultOptions = () => ({ v: 1, beginnerHelp: true, difficulty: 'normal', personality: 'random', playerName: '' });
 
-const DIFFS = new Set(['easy', 'normal', 'hard']);
+const DIFFS = new Set(['easy', 'normal', 'hard', 'veryhard']);
 const PERSS = new Set(['random', 'specialized', 'opportunistic', 'balanced']);
 
 export function loadOptions(storage) {
@@ -213,7 +213,7 @@ export function recordResult(storage, result, now = Date.now()) {
 export const HERO_KEY = 'odo-hero-v1';
 export const HERO_XP_LEVELS = [0, 100, 250, 450, 700, 1000, 1400, 1900, 2500, 3200];
 export const HERO_TITLES = { 1: '신입', 3: '수습 영웅', 5: '노련한 영웅', 7: '명성 높은 영웅', 10: '살아있는 전설' };
-export const DIFF_MULT = { easy: 0.8, normal: 1.0, hard: 1.3 };
+export const DIFF_MULT = { easy: 0.7, normal: 1.0, hard: 1.4, veryhard: 2.0 };
 const RANK_XP = [100, 60, 30, 20];
 
 export function heroXpFor(rank, difficulty) {
@@ -268,8 +268,9 @@ export function addHeroXP(storage, name, xp) {
 }
 
 // ---------- League ----------
-// { v:1, season: "YYYY-MM", points, best: { [season]: tierId }, history: [{ season, tier, points }] }
+// { v:1, season: "YYYY-MM", points, tier: 달성 티어 id, best: { [season]: tierId }, history: [...] }
 // 싱글모드 리그전에서만 가산. 멀티플레이어는 바닐라.
+// 승급은 승급전(보스전) 승리로만 발생 — 포인트가 임계값을 넘었다고 자동 승급하지 않음.
 
 export const LEAGUE_KEY = 'odo-league-v1';
 const RANK_POINTS = [100, 60, 30, 10];
@@ -278,45 +279,71 @@ export function leaguePointsFor(rank, difficulty) {
   return Math.round((RANK_POINTS[rank - 1] ?? 10) * (DIFF_MULT[difficulty] ?? 1));
 }
 
+// store.js는 league.js를 import하지 않음 (순환 방지) — 티어 판정은 아래 경량 테이블 사용
+const LEAGUE_TIER_MINS = [
+  ['mortal', 0], ['warrior', 300], ['hero', 700], ['champion', 1200], ['demigod', 1800], ['god', 2500],
+];
+export const TIER_ORDER = LEAGUE_TIER_MINS.map(([id]) => id);
+function tierForPoints(points) {
+  let t = 'mortal';
+  for (const [id, min] of LEAGUE_TIER_MINS) if (points >= min) t = id;
+  return t;
+}
+function writeLeague(storage, l) {
+  writeJSON(storage, LEAGUE_KEY, { v: 1, season: l.season, points: l.points, tier: l.tier, best: l.best, history: l.history });
+}
+
 export function loadLeague(storage, season) {
   let o = readJSON(storage, LEAGUE_KEY);
-  if (!isObj(o) || o.v !== 1) o = { v: 1, season, points: 0, best: {}, history: [] };
+  if (!isObj(o) || o.v !== 1) o = { v: 1, season, points: 0, tier: 'mortal', best: {}, history: [] };
   let rolled = null;
   if (o.season !== season && typeof o.season === 'string' && o.season) {
     // 시즌 롤오버: 최종 티어 기록 후 리셋
-    const prevTier = tierForPoints(o.points | 0);
+    const prevTier = o.tier ?? tierForPoints(o.points | 0);
     rolled = { season: o.season, tier: prevTier, points: o.points | 0 };
     o.best[o.season] = prevTier;
     o.history.push({ season: o.season, tier: prevTier, points: o.points | 0 });
     o.history = o.history.slice(-12);
     o.season = season;
     o.points = 0;
-    writeJSON(storage, LEAGUE_KEY, { v: 1, season: o.season, points: 0, best: o.best, history: o.history });
+    o.tier = 'mortal';
+    writeLeague(storage, o);
   }
+  // 구 데이터 마이그레이션: tier 필드 없으면 포인트 기준 판정 (기존 달성 인정)
+  if (typeof o.tier !== 'string' || !TIER_ORDER.includes(o.tier)) o.tier = tierForPoints(o.points | 0);
   return {
-    v: 1, season: o.season, points: o.points | 0,
+    v: 1, season: o.season, points: o.points | 0, tier: o.tier,
     best: isObj(o.best) ? o.best : {}, history: Array.isArray(o.history) ? o.history : [],
     rolled,
   };
 }
 
-// store.js는 league.js를 import하지 않음 (순환 방지) — 티어 판정은 아래 경량 테이블 사용
-const LEAGUE_TIER_MINS = [
-  ['mortal', 0], ['warrior', 300], ['hero', 700], ['champion', 1200], ['demigod', 1800], ['god', 2500],
-];
-function tierForPoints(points) {
-  let t = 'mortal';
-  for (const [id, min] of LEAGUE_TIER_MINS) if (points >= min) t = id;
-  return t;
+// 다음 티어 승급전 대기 여부: { from, to, min } | null
+// (현재 티어의 다음 티어 임계값 이상 포인트 보유 시 승급전 모드)
+export function pendingPromotion(points, tierId) {
+  const idx = TIER_ORDER.indexOf(tierId);
+  if (idx < 0 || idx >= TIER_ORDER.length - 1) return null;
+  const to = TIER_ORDER[idx + 1];
+  const min = LEAGUE_TIER_MINS[idx + 1][1];
+  if (points < min) return null;
+  return { from: tierId, to, min };
 }
 
+// 리그 포인트 가산 (자동 승급 없음 — 승급은 승급전 승리로만)
 export function addLeaguePoints(storage, pts, season) {
   const l = loadLeague(storage, season);
-  const before = tierForPoints(l.points);
   l.points += Math.max(0, pts | 0);
-  const after = tierForPoints(l.points);
-  writeJSON(storage, LEAGUE_KEY, { v: 1, season: l.season, points: l.points, best: l.best, history: l.history });
-  return { points: l.points, tier: after, promoted: after !== before };
+  writeLeague(storage, l);
+  return { points: l.points, tier: l.tier, pending: pendingPromotion(l.points, l.tier) };
+}
+
+// 승급전 승리 시 티어 1단계 상승 → 새 티어 id
+export function promoteTier(storage, season) {
+  const l = loadLeague(storage, season);
+  const idx = TIER_ORDER.indexOf(l.tier);
+  if (idx >= 0 && idx < TIER_ORDER.length - 1) l.tier = TIER_ORDER[idx + 1];
+  writeLeague(storage, l);
+  return l.tier;
 }
 
 // ---------- Challenges ----------

@@ -5,8 +5,8 @@ import {
   COLORS, MASTER, TOKEN_KEYS, MASTER_TOTAL, TOKENS_PER_COLOR, MAX_TOKENS, MAX_HAND,
   WIN_POINTS, TIER_KEYS, RESERVABLE_TIER_KEYS, TABLE_SLOTS, SPECIAL_TIER_KEYS, PHASES,
   RULE_CHOICES,
-} from './constants.js?v=1791281681';
-import { nextInt, shuffle } from './rng.js?v=1791281681';
+} from './constants.js?v=1791282537';
+import { nextInt, shuffle } from './rng.js?v=1791282537';
 
 const ok = (state, events) => ({ ok: true, state, events });
 const fail = (error) => ({ ok: false, error });
@@ -419,7 +419,7 @@ function findBuyCard(s, player, cardId) {
   return { card: found.card, handIdx: -1, found };
 }
 
-// 다이달로스 "명장의 손길" (가호 1개 할인) / 파트로클로스 "전리품" (암브로시아 1개 추가 획득)
+// 페르세우스 "여신의 가호" (가호 1개 할인) / 아킬레우스 "전리품" (암브로시아 1개 추가 획득)
 function doAbilityBuy(s, player, { cardId, payment, ability }, events) {
   const aerr = checkAbility(s, player, ability);
   if (aerr) return aerr;
@@ -456,7 +456,7 @@ function doAbilityBuy(s, player, { cardId, payment, ability }, events) {
   return null;
 }
 
-// 아가멤논 "약탈" — 가호 4종류 가져오기
+// 헤라클레스 "괴력" — 가호 4종류 가져오기
 function doAbilityTake(s, player, { colors }, events) {
   const aerr = checkAbility(s, player, 'takeFour');
   if (aerr) return aerr;
@@ -475,7 +475,7 @@ function doAbilityTake(s, player, { colors }, events) {
   return null;
 }
 
-// 네스토르 "지혜" — 진열된 카드 1줄 새로고침 (기존 카드는 덱 아래로)
+// 오디세우스 "기책" — 진열된 카드 1줄 새로고침 (기존 카드는 덱 아래로)
 function doAbilityRefresh(s, player, { tier }, events) {
   const aerr = checkAbility(s, player, 'refreshRow');
   if (aerr) return aerr;

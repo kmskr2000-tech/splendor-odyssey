@@ -13,17 +13,17 @@ try {
   }
 } catch (e) { /* 버전 확인 실패 시 조용히 진행 */ }
 
-import { CARDS } from '../data/cards.js?v=1791281681';
-import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791281681';
-import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791281681';
-import { createController } from './controller.js?v=1791281681';
-import * as V from './view.js?v=1791281681';
-import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791281681';
-import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal, loadHero, getHero, loadLeague } from '../storage/store.js?v=1791281681';
-import { TIERS, tierFor, tierProgressText, tierById, currentSeason, todayStr } from '../data/league.js?v=1791281681';
-import { dailyChallenge, weeklyChallenge } from '../data/daily.js?v=1791281681';
-import { settleMeta } from '../meta/settle.js?v=1791281681';
-import { NetSession } from '../net/session.js?v=1791281681';
+import { CARDS } from '../data/cards.js?v=1791282537';
+import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791282537';
+import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791282537';
+import { createController } from './controller.js?v=1791282537';
+import * as V from './view.js?v=1791282537';
+import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791282537';
+import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal, loadHero, getHero, loadLeague, pendingPromotion } from '../storage/store.js?v=1791282537';
+import { TIERS, tierFor, tierProgressText, tierById, currentSeason, todayStr } from '../data/league.js?v=1791282537';
+import { dailyChallenge, weeklyChallenge } from '../data/daily.js?v=1791282537';
+import { settleMeta } from '../meta/settle.js?v=1791282537';
+import { NetSession } from '../net/session.js?v=1791282537';
 
 // In-app browser guard: KakaoTalk/etc. popups die when swiped away, killing
 // multiplayer. iOS can't force-open Safari from JS, so detect and guide.
@@ -53,7 +53,7 @@ showInAppGuide();
 
 const params = new URLSearchParams(location.search);
 const AI_DELAY = params.has('fast') ? 0 : 1600; // ?fast=1 skips the pacing delay (tests)
-const AI_NAMES = ['다이달로스', '아가멤논', '파트로클로스', '네스토르'];
+const AI_NAMES = ['오디세우스', '헤라클레스', '아킬레우스', '페르세우스'];
 
 const regions = {
   header: ['header', V.headerHTML],
@@ -117,6 +117,7 @@ function render() {
     overlay = !ctrl ? V.startHTML({
       save: loadSave(storage, CARDS), dex: loadDex(storage), cards: CARDS, options, notice: netNotice,
       heroes: heroesView(), leagueMode: singleMode === 'league', tier: lv?.tier ?? null,
+      promotion: lv?.pending ?? null,
     }) : ctrl.finished ? V.endHTML(ctrl) : '';
     netNotice = '';
   }
@@ -233,11 +234,13 @@ let achvToastTimer = null;
 function leagueView() {
   const season = currentSeason();
   const l = loadLeague(storage, season);
-  const tier = tierFor(l.points);
+  const tier = tierById(l.tier);
+  const pending = pendingPromotion(l.points, l.tier);
   return {
     points: l.points,
-    tier,
-    progressText: tierProgressText(l.points),
+    tier, tierId: l.tier,
+    pending: pending ? { ...pending, boss: tierById(pending.to).boss } : null,
+    progressText: tierProgressText(l.points, l.tier),
     rolled: l.rolled ? { ...l.rolled, tierName: tierById(l.rolled.tier).name } : null,
   };
 }
@@ -312,6 +315,7 @@ const hooks = {
           heroName: ctrl.humanName, leagueMode: ctrl.leagueMode,
           evolved: me.evolved.length, track: ctrl.track,
           dateStr: todayStr(), season: currentSeason(),
+          promotionMatch: !!ctrl.promotion, promotionTo: ctrl.promotion?.to ?? null,
         });
       }
       const rec = recordResult(storage, { won, points: ctx.points, turns: ctx.turns, difficulty: ctx.difficulty, hero: isHeroGame ? ctrl.humanName : undefined });
@@ -326,7 +330,7 @@ const hooks = {
 function resumeGame() {
   const save = loadSave(storage, CARDS);
   if (!save) return;
-  ctrl = createController({ cards: CARDS, seed: save.seed, humanName: save.humanName, aiNames: save.aiNames, resume: { game: save.game, log: save.log, difficulty: save.difficulty, aiDifficulty: save.aiDifficulty, leagueMode: save.leagueMode, aiPersonalities: save.aiPersonalities, track: save.track }, hooks });
+  ctrl = createController({ cards: CARDS, seed: save.seed, humanName: save.humanName, aiNames: save.aiNames, resume: { game: save.game, log: save.log, difficulty: save.difficulty, aiDifficulty: save.aiDifficulty, leagueMode: save.leagueMode, promotion: save.promotion, aiPersonalities: save.aiPersonalities, track: save.track }, hooks });
   Object.keys(cache).forEach((k) => delete cache[k]);
   window.__ctrl = ctrl;
   render();
@@ -380,15 +384,47 @@ function startGame(humanName) {
   const seedParam = params.get('seed');
   const seed = seedParam !== null ? Number(seedParam) : (crypto.getRandomValues(new Uint32Array(1))[0] || 1);
   const league = singleMode === 'league';
-  const tier = league ? tierFor(leagueView().points) : null;
-  // 리그전: 티어 로스터 3명과 대결 (고정 성격·티어 난이도). 일반전: 나머지 3영웅.
-  const aiNames = league ? tier.roster.map((r) => r.name) : AI_NAMES.filter((n) => n !== humanName).slice(0, 3);
+  const lv = league ? leagueView() : null;
+  let tier = null, aiNames, promotion = null, rewardDiff = options.difficulty;
+  if (league) {
+    tier = lv.tier;
+    if (lv.pending) {
+      // 승급전(보스전): 보스 + 현재 티어 로스터에서 랜덤 2명. 1등 승리 시 승급.
+      // 난이도 선택 불가 — 보스 고정 강도, 보상 ×1.0
+      const boss = lv.pending.boss;
+      const mates = pickRandom(tier.roster, 2, seed + 7);
+      aiNames = [boss.name, ...mates.map((m) => m.name)];
+      tier = { ...tierById(lv.pending.to), ai: 'hard', roster: [{ name: boss.name, personality: boss.personality }, ...mates] };
+      promotion = { to: lv.pending.to, boss: boss.name };
+      rewardDiff = 'normal';
+    } else {
+      // 리그전: 티어 로스터와 대결 (4명 로스터는 3명 랜덤 출전)
+      const picked = pickRandom(tier.roster, 3, seed);
+      aiNames = picked.map((r) => r.name);
+      tier = { ...tier, roster: picked };
+    }
+  } else {
+    // 일반전: 나머지 3영웅
+    aiNames = AI_NAMES.filter((n) => n !== humanName).slice(0, 3);
+  }
   clearSave(storage); // a new game replaces any saved one
-  ctrl = createController({ cards: CARDS, seed, humanName, aiNames, hooks, difficulty: options.difficulty, leagueTier: tier });
+  ctrl = createController({ cards: CARDS, seed, humanName, aiNames, hooks, difficulty: rewardDiff, leagueTier: tier, promotion });
   saveGame(storage, ctrl.snapshot());
   Object.keys(cache).forEach((k) => delete cache[k]);
   window.__ctrl = ctrl; // debugging / automated tests
   render();
+}
+
+// 시드 기반 셔플 후 n개 선택 (테스트 결정성 유지)
+function pickRandom(arr, n, seed) {
+  const a = arr.slice();
+  let s = (seed >>> 0) || 1;
+  const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, Math.min(n, a.length));
 }
 
 function startChallenge(id) {
@@ -435,7 +471,7 @@ document.addEventListener('click', (e) => {
       saveOptions(storage, options);
       break;
     case 'difficulty':
-      if (['easy', 'normal', 'hard'].includes(d.v)) {
+      if (['easy', 'normal', 'hard', 'veryhard'].includes(d.v)) {
         options.difficulty = d.v;
         saveOptions(storage, options);
       }

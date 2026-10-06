@@ -5,10 +5,10 @@
 import {
   COLORS, MASTER, PHASES, MAX_HAND,
   createGame, applyAction, legalActions, computePayment, evolveOptions, getCurrentPlayer, tokenCount,
-} from '../core/index.js?v=1791281681';
-import { chooseAction } from '../ai/heuristic.js?v=1791281681';
-import { abilityOf } from '../data/heroes.js?v=1791281681';
-import { TIERS } from '../data/league.js?v=1791281681';
+} from '../core/index.js?v=1791282537';
+import { chooseAction } from '../ai/heuristic.js?v=1791282537';
+import { abilityOf, abilityInfo, PLAYABLE_HEROES } from '../data/heroes.js?v=1791282537';
+import { TIERS, effectiveDifficulty } from '../data/league.js?v=1791282537';
 
 export const BALLS = {
   monster: { file: 'ball-thunder', ext: 'webp', name: '천둥의 가호', short: '천둥' },
@@ -19,7 +19,7 @@ export const BALLS = {
   master: { file: 'ball-divine', ext: 'webp', name: '암브로시아', short: '신성' },
 };
 
-export const TRAINERS = ['다이달로스', '아가멤논', '파트로클로스', '네스토르'];
+export const TRAINERS = PLAYABLE_HEROES;
 
 const ERROR_TEXT = {
   bad_ball_count: '서로 다른 가호 3개를 골라주세요 (남은 종류가 적으면 그만큼만).',
@@ -52,11 +52,19 @@ function secretPersonalities(seed, playerCount) {
   return Array.from({ length: playerCount }, (_, i) => arr[i % arr.length]);
 }
 
+// 유효 AI 난이도 = clamp(티어 베이스 + 플레이어 보정). 승급전은 보스 고정 강도.
+function effectiveAiDifficulty({ leagueTier, difficulty, promotion }) {
+  if (promotion) return 'hard';
+  if (leagueTier) return effectiveDifficulty(leagueTier.ai, difficulty);
+  return effectiveDifficulty('normal', difficulty); // 일반전 베이스 normal
+}
+
 // `resume` ({ game, log }) restores a saved game instead of dealing a new one.
 // `hooks.onCatch(cardId, kind)` fires for the human's captures/evolutions, `hooks.onChange()` after
 // every accepted action, `hooks.onEnd(won)` once when the game finishes (persistence lives outside).
 // leagueTier: 올림포스 리그전 티어 객체 (AI 로스터·성격·난이도 적용). 멀티플레이어에서는 절대 사용하지 않음.
-export function createController({ cards, seed, humanName = '나', aiNames = ['다이달로스', '아가멤논', '파트로클로스'], resume = null, hooks = {}, difficulty = 'normal', challenge = null, mp = null, leagueTier = null }) {
+// promotion: { to: 승급 목표 티어 id, boss: 보스 이름 } | null — 승급전(보스전) 모드.
+export function createController({ cards, seed, humanName = '나', aiNames = ['오디세우스', '헤라클레스', '아킬레우스'], resume = null, hooks = {}, difficulty = 'normal', challenge = null, mp = null, leagueTier = null, promotion = null }) {
   const cardsById = new Map(cards.map((c) => [c.id, c]));
   // mp: { names: [...humanNames], me: index, aiNames: [...] } — multiplayer.
   // Humans first, then AI seats (acted by the host, relayed to guests).
@@ -93,9 +101,13 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
     humanName,
     aiNames,
     difficulty: resume?.difficulty ?? difficulty,
-    // 리그전: AI 난이도는 티어가 정함 (플레이어 선택 난이도는 보상 배율에만 사용)
-    aiDifficulty: resume?.aiDifficulty ?? (leagueTier ? leagueTier.ai : (resume?.difficulty ?? difficulty)),
+    // 리그전: AI 난이도는 티어 베이스 × 플레이어 선택. 승급전은 보스 고정 강도(hard).
+    // 보상 배율에만 플레이어 선택 난이도 사용.
+    aiDifficulty: resume?.aiDifficulty ?? effectiveAiDifficulty({ leagueTier, difficulty, promotion }),
     leagueMode: resume?.leagueMode ?? !!leagueTier,
+    // 승급전(보스전): { to, boss } | null. 1등 승리 시 to 티어로 승급.
+    promotion: resume?.promotion ?? promotion,
+    get promotionMatch() { return !!this.promotion; },
     challenge: resume?.challenge ?? challenge,
     challengeDone: null, // 'won' | 'lost' once the challenge resolves
     humanTurns: 0, // completed turns by the human (for challenge limits)
@@ -192,7 +204,7 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
       this.abilityArmed = null;
       this.message = '';
     },
-    // 능력으로 영입 시 지불액 (다이달로스 할인 적용)
+    // 능력으로 영입 시 지불액 (페르세우스 할인 적용)
     paymentAbility(cardId) {
       const card = this.cardsById.get(cardId);
       if (!card || this.abilityArmed !== 'discount') return null;
@@ -342,7 +354,7 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
     pass() { return this.dispatch({ type: 'pass' }); },
 
     snapshot() {
-      return { seed: this.seed, humanName: this.humanName, aiNames: this.aiNames, difficulty: this.difficulty, aiDifficulty: this.aiDifficulty, leagueMode: this.leagueMode, aiPersonalities: this.aiPersonalities, challenge: this.challenge, log: this.log, track: this.track, game: this.game };
+      return { seed: this.seed, humanName: this.humanName, aiNames: this.aiNames, difficulty: this.difficulty, aiDifficulty: this.aiDifficulty, leagueMode: this.leagueMode, promotion: this.promotion, aiPersonalities: this.aiPersonalities, challenge: this.challenge, log: this.log, track: this.track, game: this.game };
     },
 
     // Grants the challenge's starting tokens/tableau (puzzle setup).
@@ -384,11 +396,11 @@ export function describeEvent(ev, ctrl) {
   switch (ev.type) {
     case 'takeBalls': return `${who}: ${ev.colors.map((c) => BALLS[c].name).join('·')} 가져감`;
     case 'takeTwo': return `${who}: ${BALLS[ev.color].name} 2개 가져감`;
-    case 'abilityTake': return `${who}: 약탈! ${ev.colors.map((c) => BALLS[c].name).join('·')} 가져감`;
-    case 'abilityRefresh': return `${who}: 지혜! 카드 진열 새로고침`;
+    case 'abilityTake': { const ab = abilityInfo(who); return `${who}: ${ab?.name ?? '능력'}! ${ev.colors.map((c) => BALLS[c].name).join('·')} 가져감`; }
+    case 'abilityRefresh': { const ab = abilityInfo(who); return `${who}: ${ab?.name ?? '능력'}! 카드 진열 새로고침`; }
     case 'reserve': return `${who}: ${ev.source === 'deck' ? '덱 위 카드를' : `${name(ev.cardId)}을(를)`} 찜`;
     case 'buy': return `${who}: ${name(ev.cardId)} 영입!`;
-    case 'abilityBuy': return `${who}: ${name(ev.cardId)} 영입! (능력${ev.gotMaster ? ' +암브로시아' : ''})`;
+    case 'abilityBuy': { const ab = abilityInfo(who); return `${who}: ${name(ev.cardId)} 영입! (${ab?.name ?? '능력'}${ev.gotMaster ? ' +암브로시아' : ''})`; }
     case 'discard': return `${who}: ${balls(ev.tokens)} 반환`;
     case 'evolve': return `${who}: ${name(ev.from)} → ${name(ev.to)} 신격화!`;
     case 'pass': return `${who}: 차례 넘김`;

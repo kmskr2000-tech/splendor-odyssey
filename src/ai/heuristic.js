@@ -3,10 +3,10 @@
 // Works in every phase (action / discard / evolve); the UI drives AI turns with it.
 // Turn pacing (0.8s) lives in ui/main.js (AI_DELAY), not here.
 
-import { COLORS, MASTER, TOKEN_KEYS, PHASES, MAX_TOKENS, MAX_HAND, TIER_KEYS } from '../core/constants.js?v=1791281681';
+import { COLORS, MASTER, TOKEN_KEYS, PHASES, MAX_TOKENS, MAX_HAND, TIER_KEYS } from '../core/constants.js?v=1791282537';
 import {
-  legalActions, getCurrentPlayer, getBonuses, bonusList, isSpecial, evolveOptions, tokenCount,
-} from '../core/engine.js?v=1791281681';
+  legalActions, getCurrentPlayer, getBonuses, getPoints, bonusList, isSpecial, evolveOptions, tokenCount,
+} from '../core/engine.js?v=1791282537';
 
 const BASE_JITTER = 0.01; // breaks exact ties so the three AIs do not play identically
 
@@ -123,7 +123,7 @@ function pickTarget(state, player, bonuses, rnd, jit) {
   return best?.card ?? null;
 }
 
-function chooseBuy(state, player, legal, rnd, jit, pers) {
+function chooseBuy(state, player, legal, rnd, jit, pers, difficulty = 'normal') {
   const buys = legal.filter((a) => a.type === 'buy');
   if (!buys.length) return null;
   const bonuses = getBonuses(player);
@@ -136,6 +136,11 @@ function chooseBuy(state, player, legal, rnd, jit, pers) {
     let score = cardValue(state, player, card, demand) - spent * 0.1 - action.payment[MASTER] * 0.3 + rnd() * jit;
     if (focus) score += bonusList(card).filter((b) => focus.includes(b)).length * 2;
     if (pers === 'opportunistic') score += deniedValue(state, card) * 3; // hate-draft
+    // veryhard 클로징 본능: 누군가 12점+면 점수 카드 우선 구매
+    if (difficulty === 'veryhard') {
+      const maxPts = Math.max(...state.players.map((p) => getPoints(p)));
+      if (maxPts >= 12) score += card.points * 3;
+    }
     if (!best || score > best.score) best = { action, score };
   }
   return best.action;
@@ -160,7 +165,7 @@ function takeScoreCtx(state, player, target, bonuses, difficulty, pers) {
     want: target ? deficits(player, target, bonuses) : Object.fromEntries(COLORS.map((c) => [c, 0])),
     demand: demandByColor(state, player, bonuses),
     held: tokenCount(player),
-    opp: (difficulty === 'hard' || pers === 'opportunistic') ? opponentWant(state, state.current) : null,
+    opp: (difficulty === 'hard' || difficulty === 'veryhard' || pers === 'opportunistic') ? opponentWant(state, state.current) : null,
     focus: pers === 'specialized' ? focusColors(state.current) : null,
   };
 }
@@ -186,7 +191,7 @@ function scoreTakeGot(got, ctx, takeTwoColor, rnd, jit) {
 function chooseReserve(state, player, legal, target, bonuses, rnd, jit, difficulty, pers) {
   const reserves = legal.filter((a) => a.type === 'reserve');
   if (!reserves.length || player.hand.length >= MAX_HAND || state.supply[MASTER] < 1) return null;
-  if (difficulty === 'hard' || pers === 'opportunistic') {
+  if (difficulty === 'hard' || difficulty === 'veryhard' || pers === 'opportunistic') {
     const threat = threatenedCard(state);
     if (threat) {
       const denial = reserves.find((a) => a.source === 'table' && a.cardId === threat.id);
@@ -221,7 +226,8 @@ function chooseEvolve(state, player, legal, difficulty, rnd) {
     const old = player.tableau.find((c) => c.id === option.cardId);
     const next = cardById(state, player, option.nextId);
     const gain = next.points - old.points;
-    if (gain > 0 && (!best || gain > best.gain)) best = { gain, action: legal.find((a) => a.type === 'evolve' && a.cardId === option.cardId) };
+    // veryhard: 진화 스킵 절대 안 함 (이득이 0이어도 진화)
+    if ((gain > 0 || difficulty === 'veryhard') && (!best || gain > best.gain)) best = { gain, action: legal.find((a) => a.type === 'evolve' && a.cardId === option.cardId) };
   }
   return best?.action ?? { type: 'skipEvolve' };
 }
@@ -249,8 +255,9 @@ function chooseDiscard(state, player, count, rnd, jit) {
 
 // ---------- hero abilities (single-player only, once per game) ----------
 // 각 영웅의 합리적 사용 타이밍:
-// 다이달로스(할인)=살 수 있는 가장 비싼 카드 / 아가멤논(4종)=가호 부족 시
-// 파트로클로스(암브로시아)=5점+ 카드 영입 시 / 네스토르(새로고침)=살 수 있는 카드가 없을 때
+// 페르세우스(할인)=살 수 있는 가장 비싼 카드 / 헤라클레스(4종)=가호 부족 시
+// 아킬레우스(암브로시아)=5점+ 카드 영입 시 / 오디세우스(새로고침)=살 수 있는 카드가 없을 때
+// 보스·리그 AI도 같은 능력 id를 쓰므로 동일 로직 적용
 function chooseAbility(state, player, legal, ability, rnd, jit, difficulty, pers) {
   if (state.abilityUsed[state.current]) return null;
   if (ability === 'discount') {
@@ -265,7 +272,7 @@ function chooseAbility(state, player, legal, ability, rnd, jit, difficulty, pers
     return best.action;
   }
   if (ability === 'masterBonus') {
-    const buy = chooseBuy(state, player, legal, rnd, jit, pers);
+    const buy = chooseBuy(state, player, legal, rnd, jit, pers, difficulty);
     if (!buy) return null;
     const card = cardById(state, player, buy.cardId);
     if (card.points < 5) return null;
@@ -299,7 +306,7 @@ function chooseAbility(state, player, legal, ability, rnd, jit, difficulty, pers
 }
 
 export function chooseAction(state, rnd = Math.random, difficulty = 'normal', personality = 'random') {
-  const jit = difficulty === 'easy' ? 2.0 : difficulty === 'hard' ? 0 : BASE_JITTER;
+  const jit = difficulty === 'easy' ? 2.0 : (difficulty === 'hard' || difficulty === 'veryhard') ? 0 : BASE_JITTER;
   const pers = resolvePersonality(state, personality);
   const player = getCurrentPlayer(state);
   const legal = legalActions(state);
@@ -312,7 +319,7 @@ export function chooseAction(state, rnd = Math.random, difficulty = 'normal', pe
     if (ab) return ab;
   }
 
-  const buy = chooseBuy(state, player, legal, rnd, jit, pers);
+  const buy = chooseBuy(state, player, legal, rnd, jit, pers, difficulty);
   if (buy) return buy;
 
   const bonuses = getBonuses(player);

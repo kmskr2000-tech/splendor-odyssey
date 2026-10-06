@@ -3,15 +3,16 @@
 // ctx: {
 //   won, rank(1-4), points, turns(인간 턴), difficulty(플레이어 선택), aiDifficulty(실효),
 //   heroName, leagueMode(bool), evolved(신격화 횟수), track: { reserve, take },
-//   dateStr: 'YYYY-MM-DD', season: 'YYYY-MM'
+//   dateStr: 'YYYY-MM-DD', season: 'YYYY-MM',
+//   promotionMatch(bool), promotionTo(승급 목표 티어 id | null) — 승급전 승리 시 승급
 // }
 
 import {
-  addHeroXP, heroXpFor, addLeaguePoints, leaguePointsFor,
+  addHeroXP, heroXpFor, addLeaguePoints, leaguePointsFor, promoteTier,
   completeDaily, completeChal, loadChal,
-} from '../storage/store.js?v=1791281681';
-import { dailyChallenge, weeklyChallenge, isChallengeComplete } from '../data/daily.js?v=1791281681';
-import { tierProgress, tierById } from '../data/league.js?v=1791281681';
+} from '../storage/store.js?v=1791282537';
+import { dailyChallenge, weeklyChallenge, isChallengeComplete } from '../data/daily.js?v=1791282537';
+import { TIERS, tierById } from '../data/league.js?v=1791282537';
 
 export function settleMeta(storage, ctx) {
   const out = { xp: null, league: null, daily: null, weekly: null };
@@ -24,13 +25,24 @@ export function settleMeta(storage, ctx) {
   }
 
   // 2. 올림포스 리그 (리그전에서만)
+  // 승급은 승급전(보스전) 1등 승리로만 발생. 일반 게임은 포인트만 적립.
   if (ctx.leagueMode) {
     const gained = leaguePointsFor(ctx.rank, ctx.difficulty);
     const r = addLeaguePoints(storage, gained, ctx.season);
-    const prog = tierProgress(r.points);
+    let tierId = r.tier;
+    let promoted = false;
+    if (ctx.promotionMatch && ctx.rank === 1 && ctx.promotionTo) {
+      tierId = promoteTier(storage, ctx.season);
+      promoted = true;
+    }
+    const tier = tierById(tierId);
+    const tIdx = TIERS.findIndex((t) => t.id === tierId);
+    const next = tIdx + 1 < TIERS.length ? TIERS[tIdx + 1] : null;
+    const pending = !promoted && r.pending ? { ...r.pending, boss: tierById(r.pending.to).boss } : null;
     out.league = {
-      gained, points: r.points, tier: tierById(r.tier), promoted: r.promoted,
-      next: prog.next, toGo: prog.toGo,
+      gained, points: r.points, tier, promoted, next,
+      toGo: next ? next.min - r.points : 0, pending,
+      bossBeaten: promoted ? tierById(ctx.promotionTo)?.boss ?? null : null,
     };
   }
 

@@ -1,14 +1,14 @@
 // Pure HTML-string renderers. Each takes the controller and returns markup; main.js owns the DOM.
 // All text interpolated here comes from our own card data / constants (no user input).
 
-import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791281681';
-import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791281681';
-import { BALLS, TRAINERS, evoText } from './controller.js?v=1791281681';
-import { dexSummary } from '../storage/store.js?v=1791281681';
-import { abilityInfo } from '../data/heroes.js?v=1791281681';
-import { tierProgressText } from '../data/league.js?v=1791281681';
-import { ACHIEVEMENTS } from '../data/achievements.js?v=1791281681';
-import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791281681';
+import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791282537';
+import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791282537';
+import { BALLS, TRAINERS, evoText } from './controller.js?v=1791282537';
+import { dexSummary } from '../storage/store.js?v=1791282537';
+import { abilityInfo, isBoss } from '../data/heroes.js?v=1791282537';
+import { tierProgressText, tierById, effectiveDifficulty, DIFF_LABEL } from '../data/league.js?v=1791282537';
+import { ACHIEVEMENTS } from '../data/achievements.js?v=1791282537';
+import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791282537';
 
 const diffLabel = { easy: '쉬움', normal: '보통', hard: '어려움' };
 
@@ -17,14 +17,24 @@ export const ballSrc = (key) => `${ASSET}/items/${BALLS[key].file}.${BALLS[key].
 const mythSrc = (id) => `${ASSET}/myth/${id}.webp`;
 
 const ballImg = (key, cls = 'miniball') => `<img class="${cls}" src="${ballSrc(key)}" alt="${BALLS[key].name}">`;
-// AI 영웅 얼굴 (다이달로스 등). 멀티플레이 인간 이름에는 없음.
+// 캐릭터 얼굴 (플레이어블 4영웅 + 승급전 보스 5명 + 구 영웅 3명은 리그 상대로 재사용)
 const HERO_FACE = {
-  '다이달로스': 'hero-daidalos',
+  '오디세우스': 'hero-odysseus',
+  '헤라클레스': 'hero-heracles',
+  '아킬레우스': 'hero-achilles',
+  '페르세우스': 'hero-perseus',
+  '미노타우로스': 'hero-minotaur',
+  '메두사': 'hero-medusa',
+  '히드라': 'hero-hydra',
   '아가멤논': 'hero-agamemnon',
+  '제우스': 'hero-zeus',
+  '다이달로스': 'hero-daidalos',
   '파트로클로스': 'hero-patroklos',
   '네스토르': 'hero-nestor',
 };
 export const heroFaceSrc = (name) => HERO_FACE[name] ? `${ASSET}/heroes/${HERO_FACE[name]}.webp` : null;
+// 승급전 보스 여부 (게임 화면에서 BOSS 태그·금테두리용)
+export const bossOf = (ctrl, p) => !!(ctrl?.promotion && ctrl.promotion.boss === p?.name);
 // Escape user-supplied text (multiplayer names). Card data is trusted; names are not.
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const staticSprite = (card, cls = 'tiny') => `<img class="${cls}" src="${mythSrc(card.id)}" alt="">`;
@@ -111,7 +121,7 @@ export function opponentsHTML(ctrl) {
       .map((k) => `<span class="otp">${ballImg(k, 'mini2')}${p.tokens[k]}</span>`).join('');
     return `
     <button class="opp px ${s.current === p.id && !ctrl.finished ? 'active' : ''}" data-action="opp" data-id="${p.id}">
-      <div class="nm">${heroFaceSrc(p.name) ? `<img class="tface" src="${heroFaceSrc(p.name)}" alt="">` : ''}${p.isAI ? 'AI ' : '📡 '}${esc(p.name)}</div>
+      <div class="nm">${heroFaceSrc(p.name) ? `<img class="tface${bossOf(ctrl, p) ? ' bossface' : ''}" src="${heroFaceSrc(p.name)}" alt="">` : ''}${bossOf(ctrl, p) ? '👹 BOSS ' : (p.isAI ? 'AI ' : '📡 ')}${esc(p.name)}</div>
       <div class="sc">${getPoints(p)}</div>
       <div class="olbl2">가호(할인)</div>
       <div class="pips">${bonusPips(p)}</div>
@@ -264,6 +274,8 @@ export function aiToastHTML(ctrl) {
   if (!ev || ctrl.isHumanTurn || ctrl.finished) return '';
   const p = ctrl.state.players[ev.player];
   if (!p) return '';
+  const boss = !!(ctrl.promotion && ctrl.promotion.boss === p.name);
+  const whoLabel = boss ? `👹 BOSS ${p.name}` : `AI ${p.name}`;
   let body = '';
   if (ev.type === 'takeBalls') body = `${ev.colors.map((c) => ballImg(c, 'ballspr')).join('')} 가져감`;
   else if (ev.type === 'takeTwo') body = `${ballImg(ev.color, 'ballspr')}<b>×2</b> 가져감`;
@@ -277,8 +289,21 @@ export function aiToastHTML(ctrl) {
     const from = ctrl.cardsById.get(ev.from);
     const to = ctrl.cardsById.get(ev.to);
     body = from && to ? `${staticSprite(from)} → ${staticSprite(to)}<b>신격화!</b>` : '신격화!';
+  } else if (ev.type === 'abilityBuy' || ev.type === 'abilityTake' || ev.type === 'abilityRefresh') {
+    // 능력 사용 토스트: "👹 BOSS 미노타우로스 — 폭식 사용!"
+    const ab = abilityInfo(p.name);
+    let detail = '';
+    if (ev.type === 'abilityBuy') {
+      const card = ctrl.cardsById.get(ev.cardId);
+      detail = card ? ` ${staticSprite(card)}<b>${card.name}</b> 영입!` : ' 영입!';
+    } else if (ev.type === 'abilityTake') {
+      detail = ` ${ev.colors.map((c) => ballImg(c, 'ballspr')).join('')} 가져감`;
+    } else {
+      detail = ' 카드 진열 새로고침';
+    }
+    body = `${boss ? '👹' : '⚡'} <b>${ab?.name ?? '능력'}</b> 사용!${detail}`;
   } else return '';
-  return `<div class="aitoast"><span class="who">AI ${p.name}</span><span class="what">${body}</span></div>`;
+  return `<div class="aitoast"><span class="who">${whoLabel}</span><span class="what">${body}</span></div>`;
 }
 
 // ---------- sheet + overlays ----------
@@ -297,7 +322,7 @@ function oppSheetHTML(p, ctrl) {
     ? p.hand.map((card) => `<button class="orsv" data-action="view-card" data-card="${card.id}" data-from="opp" data-pid="${p.id}">${staticSprite(card)}${card.name} <small>${tierLabel[card.tier]}${card.points ? ` · ${card.points}점` : ''}</small></button>`).join('')
     : '<div class="empty-note">없음</div>';
   return `<div class="sheet-back" data-action="close"></div><div class="sheet wide">
-    <div class="sheet-title">${heroFaceSrc(p.name) ? `<img class="tface big" src="${heroFaceSrc(p.name)}" alt="">` : ''}${p.isAI ? 'AI ' : '📡 '}${esc(p.name)} <small>· ${getPoints(p)}점 · 신격화 ${p.evolved.length}회</small></div>
+    <div class="sheet-title">${heroFaceSrc(p.name) ? `<img class="tface big" src="${heroFaceSrc(p.name)}" alt="">` : ''}${bossOf(ctrl, p) ? '👹 BOSS ' : (p.isAI ? 'AI ' : '📡 ')}${esc(p.name)} <small>· ${getPoints(p)}점 · 신격화 ${p.evolved.length}회</small></div>
     <div class="olbl">■ 가호 (할인)</div>
     <div class="pips big">${COLORS.map((c) => `<span class="pip d-${c}">${ballImg(c, 'mini2')}${b[c]}</span>`).join('')}</div>
     <div class="olbl">■ 가진 가호 (${tokenCount(p)}/10)</div>
@@ -409,7 +434,8 @@ export function modeHTML({ league = null, daily = null, weekly = null, chalDone 
       <div class="tierinfo"><b>${league.tier.name}</b><br><small>${league.progressText}</small></div>
       <div class="tierpts">${league.points}점</div>
     </div>
-    ${league.rolled ? `<p class="sheet-p">지난 시즌 <b>${league.rolled.tierName}</b> 달성! 새 시즌이 시작됐어요.</p>` : ''}` : '';
+    ${league.rolled ? `<p class="sheet-p">지난 시즌 <b>${league.rolled.tierName}</b> 달성! 새 시즌이 시작됐어요.</p>` : ''}
+    ${league.pending ? `<p class="sheet-p promo-hint">👹 <b>${esc(league.pending.boss.name)}(${esc(league.pending.boss.title)})</b> 승급전 도전 가능!</p>` : ''}` : '';
   const chalCard = (ch, label) => ch ? `
     <div class="dailycard ${chalDone[ch.id] ? 'done' : ''}">
       <span class="dico">${chalDone[ch.id] ? '✅' : (ch.kind === 'daily' ? '📅' : '🗓️')}</span>
@@ -418,7 +444,7 @@ export function modeHTML({ league = null, daily = null, weekly = null, chalDone 
     </div>` : '';
   return `<div class="overlay"><div class="panel modepanel">
     <div class="titlebanner"><img src="assets/title-logo.webp" alt="Odyssey: The Card"><div class="titletxt">Odyssey: The Card<small>오디세이아 · DOT EDITION</small></div></div>
-    <p class="sheet-p">보드게임 <b>스플렌더</b>에서 영감을 받은 카드 수집 게임이에요.<br>가호를 모아 카드를 영입하고, 신화를 먼저 완성(18점)하세요!</p>
+    <p class="sheet-p">가호를 모아 카드를 영입하는 턴제 전략 카드 게임이에요.<br>가호를 모아 카드를 영입하고, 신화를 먼저 완성(18점)하세요!</p>
     ${leagueBadge}
     <div class="btnrow col modebtns">
       <button class="btn primary modebtn" data-action="mode-league">🏆 리그전<small>${league ? `${league.tier.theme}` : 'AI 3명과 4인전'} · 포인트 획득</small></button>
@@ -429,7 +455,7 @@ export function modeHTML({ league = null, daily = null, weekly = null, chalDone 
   </div></div>`;
 }
 
-export function startHTML({ save = null, dex = null, cards = [], options = null, notice = '', heroes = null, leagueMode = false, tier = null } = {}) {
+export function startHTML({ save = null, dex = null, cards = [], options = null, notice = '', heroes = null, leagueMode = false, tier = null, promotion = null } = {}) {
   const sum = dex ? dexSummary(dex, cards) : null;
   const diff = options?.difficulty ?? 'normal';
   const resume = save
@@ -449,9 +475,25 @@ export function startHTML({ save = null, dex = null, cards = [], options = null,
       <span class="tiericon">${tier.icon}</span>
       <div class="tierinfo"><b>${tier.name}의 시련</b><br><small>${tier.theme}</small></div>
     </div>
-    <p class="sheet-p">상대: <b>${tier.roster.map((r) => r.name).join(' · ')}</b><br>승리하면 리그 포인트를 얻어요.</p>` : '';
-  const diffHead = leagueMode ? '도전 배율<small>보상 ×0.8 / ×1.0 / ×1.3 (AI 강도는 티어가 정해요)</small>' : 'AI 난이도';
-  const diffNames = leagueMode ? { easy: '낮음 ×0.8', normal: '보통 ×1.0', hard: '높음 ×1.3' } : { easy: '쉬움', normal: '보통', hard: '어려움' };
+    ${promotion ? `
+    <div class="promobanner">👹 승급전<small>${esc(promotion.boss.banner)}</small></div>
+    <p class="sheet-p">보스: <b>👹 ${esc(promotion.boss.name)} (${esc(promotion.boss.title)})</b><br>
+    1등으로 승리하면 <b>${esc(tierById(promotion.to).name)}</b>로 승급!</p>`
+    : `<p class="sheet-p">상대: <b>${tier.roster.map((r) => r.name).join(' · ')}</b>${tier.roster.length > 3 ? ' (3명 랜덤 출전)' : ''}<br>승리하면 리그 포인트를 얻어요.</p>`}` : '';
+  const multLabel = { easy: '×0.7', normal: '×1.0', hard: '×1.4', veryhard: '×2.0' };
+  const diffHead = leagueMode
+    ? '도전 배율<small>보상 ×0.7 / ×1.0 / ×1.4 / ×2.0 (상대 강도 = 티어+선택)</small>'
+    : 'AI 난이도<small>보상 ×0.7 / ×1.0 / ×1.4 / ×2.0</small>';
+  // 유효 난이도 미리보기 (승급전은 고정)
+  const effName = leagueMode && tier ? effectiveDifficulty(tier.ai, diff) : effectiveDifficulty('normal', diff);
+  const diffPreview = promotion
+    ? `<div class="difflabel">난이도 고정<small>보스전은 보스 강도로 진행 · 보상 ×1.0</small></div>`
+    : `<div class="difflabel">${diffHead}</div>
+    <div class="diffrow">
+      ${[['easy', '쉬움'], ['normal', '보통'], ['hard', '어려움'], ['veryhard', '매우어려움']].map(([v, l]) =>
+        `<button class="diffbtn ${diff === v ? 'sel' : ''}" data-action="difficulty" data-v="${v}">${l}<small>${multLabel[v]}</small></button>`).join('')}
+    </div>
+    <p class="sheet-p diffpreview">상대 강도: <b>${DIFF_LABEL[effName]}</b></p>`;
   return `<div class="overlay"><div class="panel">
     <div class="titlebanner"><img src="assets/title-logo.webp" alt="Odyssey: The Card"><div class="titletxt">Odyssey: The Card<small>오디세이아 · DOT EDITION</small></div></div>
     ${leagueHead}
@@ -459,11 +501,7 @@ export function startHTML({ save = null, dex = null, cards = [], options = null,
     ${notice ? `<p class="sheet-p warn">${esc(notice)}</p>` : ''}
     ${resume}
     <div class="tiles">${tiles}</div>
-    <div class="difflabel">${diffHead}</div>
-    <div class="diffrow">
-      ${[['easy', diffNames.easy], ['normal', diffNames.normal], ['hard', diffNames.hard]].map(([v, l]) =>
-        `<button class="diffbtn ${diff === v ? 'sel' : ''}" data-action="difficulty" data-v="${v}">${l}</button>`).join('')}
-    </div>
+    ${diffPreview}
     <p class="sheet-p">${leagueMode ? '리그전 상대의 성격은 티어 로스터마다 고정되어 있어요.' : 'AI의 플레이 스타일(전문화·견제·균형)은 매 게임 랜덤으로 정해져요. 🤫'}</p>
     <p class="sheet-p">영웅 능력은 게임당 1회씩! AI 영웅도 사용해요.</p>
     ${save ? '<p class="sheet-p warn">새로 시작하면 저장된 게임은 사라져요.</p>' : ''}
@@ -482,7 +520,7 @@ export function rulesHTML() {
   return `<div class="overlay"><div class="panel rulespanel">
     <div class="title big">룰 설명</div>
     <div class="rules">
-      <p class="homage">보드게임 <b>스플렌더</b>에서 영감을 받은 게임이에요.<br>가호 수집 → 카드 영입 → 18점 경쟁!</p>
+      <p class="homage">가호 수집 → 카드 영입 → 18점 경쟁!<br>카드를 모을수록 가호 할인이 쌓이는 전략 카드 게임이에요.</p>
       <h4>■ 목표</h4>
       <p><b>18점</b>을 먼저 모으면 마지막 라운드! 전원이 같은 턴 수를 마치면 종료, 최고점이 승리해요.</p>
       <h4>■ 내 차례에 하는 일 (하나만 선택)</h4>
@@ -601,8 +639,12 @@ export function endHTML(ctrl) {
     if (m.xp) parts.push(`<div class="metarow">📈 ${m.xp.hero} +${m.xp.gained} XP → Lv.${m.xp.level} ${m.xp.title}${m.xp.leveledUp ? ' <b>🎉 레벨업!</b>' : ''}</div>`);
     if (m.league) {
       const ascended = m.league.promoted && m.league.tier.id === 'god';
+      const beaten = m.league.bossBeaten ? `👹 ${m.league.bossBeaten.name} 격파! ` : '';
+      const pendingHint = !m.league.promoted && m.league.pending
+        ? ` 👹 <b>${m.league.pending.boss.name}</b> 승급전 도전 가능!`
+        : '';
       parts.push(`<div class="metarow">🏆 리그 +${m.league.gained}점 → ${m.league.tier.icon} ${m.league.tier.name}`
-        + `${m.league.promoted ? ` <b>👑 승급!${ascended ? ' 신에 오르셨습니다!' : ''}</b>` : ` (${m.league.next ? `${m.league.next.name}까지 ${m.league.toGo}점` : '최고 티어'})`}</div>`);
+        + `${m.league.promoted ? ` <b>${beaten}👑 승급!${ascended ? ' 신에 오르셨습니다!' : ''}</b>` : ` (${m.league.next ? `${m.league.next.name}까지 ${m.league.toGo}점` : '최고 티어'})${pendingHint}`}</div>`);
     }
     if (m.daily?.isNew) parts.push(`<div class="metarow">✅ 일일 도전 완료: ${m.daily.name}${m.daily.streak > 1 ? ` (🔥 ${m.daily.streak}일 연속)` : ''}</div>`);
     if (m.weekly?.isNew) parts.push(`<div class="metarow">✅ 주간 도전 완료: ${m.weekly.name}</div>`);
