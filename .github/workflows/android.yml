@@ -30,8 +30,9 @@ jobs:
           java-version: 17
 
       - name: Install Capacitor
-        run: npm init -y
-npm install @capacitor/core @capacitor/cli @capacitor/android
+        run: |
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android
 
       - name: Prepare web assets
         run: |
