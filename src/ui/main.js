@@ -13,17 +13,17 @@ try {
   }
 } catch (e) { /* 버전 확인 실패 시 조용히 진행 */ }
 
-import { CARDS } from '../data/cards.js?v=1791282537';
-import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791282537';
-import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791282537';
-import { createController } from './controller.js?v=1791282537';
-import * as V from './view.js?v=1791282537';
-import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791282537';
-import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal, loadHero, getHero, loadLeague, pendingPromotion } from '../storage/store.js?v=1791282537';
-import { TIERS, tierFor, tierProgressText, tierById, currentSeason, todayStr } from '../data/league.js?v=1791282537';
-import { dailyChallenge, weeklyChallenge } from '../data/daily.js?v=1791282537';
-import { settleMeta } from '../meta/settle.js?v=1791282537';
-import { NetSession } from '../net/session.js?v=1791282537';
+import { CARDS } from '../data/cards.js?v=1791282997';
+import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791282997';
+import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791282997';
+import { createController } from './controller.js?v=1791282997';
+import * as V from './view.js?v=1791282997';
+import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791282997';
+import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal, loadHero, getHero, loadLeague, pendingPromotion } from '../storage/store.js?v=1791282997';
+import { TIERS, tierFor, tierProgressText, tierById, currentSeason, todayStr } from '../data/league.js?v=1791282997';
+import { dailyChallenge, weeklyChallenge } from '../data/daily.js?v=1791282997';
+import { settleMeta } from '../meta/settle.js?v=1791282997';
+import { NetSession } from '../net/session.js?v=1791282997';
 
 // In-app browser guard: KakaoTalk/etc. popups die when swiped away, killing
 // multiplayer. iOS can't force-open Safari from JS, so detect and guide.
@@ -447,7 +447,12 @@ document.addEventListener('click', (e) => {
   const d = el.dataset;
   switch (d.action) {
     case 'intro-tap': introDone = true; break;
-    case 'mode-single': singleMode = 'normal'; modeDone = true; break;
+    case 'mode-single': {
+      singleMode = 'normal'; modeDone = true;
+      // 일반전: 영웅 선택 없이 랜덤 영웅으로 바로 시작
+      const hero = AI_NAMES[Math.floor(Math.random() * AI_NAMES.length)];
+      startGame(hero); return;
+    }
     case 'mode-league': singleMode = 'league'; modeDone = true; break;
     case 'mode-back': modeDone = false; break;
     case 'mode-net': modeDone = true; openNet(); return;

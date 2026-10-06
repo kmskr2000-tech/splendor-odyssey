@@ -5,10 +5,10 @@
 import {
   COLORS, MASTER, PHASES, MAX_HAND,
   createGame, applyAction, legalActions, computePayment, evolveOptions, getCurrentPlayer, tokenCount,
-} from '../core/index.js?v=1791282537';
-import { chooseAction } from '../ai/heuristic.js?v=1791282537';
-import { abilityOf, abilityInfo, PLAYABLE_HEROES } from '../data/heroes.js?v=1791282537';
-import { TIERS, effectiveDifficulty } from '../data/league.js?v=1791282537';
+} from '../core/index.js?v=1791282997';
+import { chooseAction } from '../ai/heuristic.js?v=1791282997';
+import { abilityOf, abilityInfo, PLAYABLE_HEROES } from '../data/heroes.js?v=1791282997';
+import { TIERS, effectiveDifficulty } from '../data/league.js?v=1791282997';
 
 export const BALLS = {
   monster: { file: 'ball-thunder', ext: 'webp', name: '천둥의 가호', short: '천둥' },
@@ -73,12 +73,17 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
     ...((mp.aiNames || []).map((name) => ({ name, isAI: true }))),
   ] : null;
   const playerCount = mpPlayers ? mpPlayers.length : 1 + aiNames.length;
-  // 영웅 능력: 싱글모드 전용 (멀티는 완전 바닐라)
-  const abilityFor = (name) => (mp ? null : abilityOf(name));
+  // 영웅 능력: 싱글모드 전용 (멀티는 완전 바닐라). 플레이어는 항상, AI는 보스만 사용.
+  const bossName = promotion?.boss ?? null;
+  const abilityFor = (name, isAI) => {
+    if (mp) return null;
+    if (!isAI) return abilityOf(name);
+    return name === bossName ? abilityOf(name) : null;
+  };
   const game = resume?.game ?? createGame({
     cards,
     seed,
-    players: mpPlayers ?? [{ name: humanName, isAI: false, ability: abilityFor(humanName) }, ...aiNames.map((name) => ({ name, isAI: true, ability: abilityFor(name) }))],
+    players: mpPlayers ?? [{ name: humanName, isAI: false, ability: abilityFor(humanName, false) }, ...aiNames.map((name) => ({ name, isAI: true, ability: abilityFor(name, true) }))],
   });
   // 구버전 세이브 마이그레이션 (abilityUsed/ability 필드 없음)
   if (!Array.isArray(game.abilityUsed)) game.abilityUsed = game.players.map(() => false);

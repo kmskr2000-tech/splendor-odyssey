@@ -10,9 +10,9 @@
 import {
   addHeroXP, heroXpFor, addLeaguePoints, leaguePointsFor, promoteTier,
   completeDaily, completeChal, loadChal,
-} from '../storage/store.js?v=1791282537';
-import { dailyChallenge, weeklyChallenge, isChallengeComplete } from '../data/daily.js?v=1791282537';
-import { TIERS, tierById } from '../data/league.js?v=1791282537';
+} from '../storage/store.js?v=1791282997';
+import { dailyChallenge, weeklyChallenge, isChallengeComplete } from '../data/daily.js?v=1791282997';
+import { TIERS, tierById } from '../data/league.js?v=1791282997';
 
 export function settleMeta(storage, ctx) {
   const out = { xp: null, league: null, daily: null, weekly: null };

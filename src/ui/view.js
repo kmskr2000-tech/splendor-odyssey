@@ -1,14 +1,14 @@
 // Pure HTML-string renderers. Each takes the controller and returns markup; main.js owns the DOM.
 // All text interpolated here comes from our own card data / constants (no user input).
 
-import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791282537';
-import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791282537';
-import { BALLS, TRAINERS, evoText } from './controller.js?v=1791282537';
-import { dexSummary } from '../storage/store.js?v=1791282537';
-import { abilityInfo, isBoss } from '../data/heroes.js?v=1791282537';
-import { tierProgressText, tierById, effectiveDifficulty, DIFF_LABEL } from '../data/league.js?v=1791282537';
-import { ACHIEVEMENTS } from '../data/achievements.js?v=1791282537';
-import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791282537';
+import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791282997';
+import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791282997';
+import { BALLS, TRAINERS, evoText } from './controller.js?v=1791282997';
+import { dexSummary } from '../storage/store.js?v=1791282997';
+import { abilityInfo, isBoss } from '../data/heroes.js?v=1791282997';
+import { tierProgressText, tierById } from '../data/league.js?v=1791282997';
+import { ACHIEVEMENTS } from '../data/achievements.js?v=1791282997';
+import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791282997';
 
 const diffLabel = { easy: '쉬움', normal: '보통', hard: '어려움' };
 
@@ -448,7 +448,7 @@ export function modeHTML({ league = null, daily = null, weekly = null, chalDone 
     ${leagueBadge}
     <div class="btnrow col modebtns">
       <button class="btn primary modebtn" data-action="mode-league">🏆 리그전<small>${league ? `${league.tier.theme}` : 'AI 3명과 4인전'} · 포인트 획득</small></button>
-      <button class="btn alt modebtn" data-action="mode-single">⚔️ 일반전<small>4영웅 중 선택 · 영웅 능력 사용</small></button>
+      <button class="btn alt modebtn" data-action="mode-single">⚔️ 일반전<small>🎲 랜덤 영웅으로 바로 시작</small></button>
       <button class="btn alt modebtn" data-action="mode-net">🌐 대전 모드<small>친구와 2~4인 멀티플레이</small></button>
     </div>
     <div class="dailies">${chalCard(daily, '오늘의 도전')}${chalCard(weekly, '이번 주 도전')}</div>
@@ -482,18 +482,16 @@ export function startHTML({ save = null, dex = null, cards = [], options = null,
     : `<p class="sheet-p">상대: <b>${tier.roster.map((r) => r.name).join(' · ')}</b>${tier.roster.length > 3 ? ' (3명 랜덤 출전)' : ''}<br>승리하면 리그 포인트를 얻어요.</p>`}` : '';
   const multLabel = { easy: '×0.7', normal: '×1.0', hard: '×1.4', veryhard: '×2.0' };
   const diffHead = leagueMode
-    ? '도전 배율<small>보상 ×0.7 / ×1.0 / ×1.4 / ×2.0 (상대 강도 = 티어+선택)</small>'
+    ? '도전 배율<small>보상 ×0.7 / ×1.0 / ×1.4 / ×2.0 · 리그가 오르면 상대가 강해져요</small>'
     : 'AI 난이도<small>보상 ×0.7 / ×1.0 / ×1.4 / ×2.0</small>';
-  // 유효 난이도 미리보기 (승급전은 고정)
-  const effName = leagueMode && tier ? effectiveDifficulty(tier.ai, diff) : effectiveDifficulty('normal', diff);
+  // 승급전은 난이도 고정
   const diffPreview = promotion
     ? `<div class="difflabel">난이도 고정<small>보스전은 보스 강도로 진행 · 보상 ×1.0</small></div>`
     : `<div class="difflabel">${diffHead}</div>
     <div class="diffrow">
       ${[['easy', '쉬움'], ['normal', '보통'], ['hard', '어려움'], ['veryhard', '매우어려움']].map(([v, l]) =>
         `<button class="diffbtn ${diff === v ? 'sel' : ''}" data-action="difficulty" data-v="${v}">${l}<small>${multLabel[v]}</small></button>`).join('')}
-    </div>
-    <p class="sheet-p diffpreview">상대 강도: <b>${DIFF_LABEL[effName]}</b></p>`;
+    </div>`;
   return `<div class="overlay"><div class="panel">
     <div class="titlebanner"><img src="assets/title-logo.webp" alt="Odyssey: The Card"><div class="titletxt">Odyssey: The Card<small>오디세이아 · DOT EDITION</small></div></div>
     ${leagueHead}
