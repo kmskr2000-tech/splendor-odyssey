@@ -13,13 +13,40 @@ try {
   }
 } catch (e) { /* 버전 확인 실패 시 조용히 진행 */ }
 
-import { CARDS } from '../data/cards.js?v=1791269756';
-import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791269756';
-import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791269756';
-import { createController } from './controller.js?v=1791269756';
-import * as V from './view.js?v=1791269756';
-import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791269756';
-import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal } from '../storage/store.js?v=1791269756';
+import { CARDS } from '../data/cards.js?v=1791274956';
+import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791274956';
+import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791274956';
+import { createController } from './controller.js?v=1791274956';
+import * as V from './view.js?v=1791274956';
+import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791274956';
+import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal } from '../storage/store.js?v=1791274956';
+import { NetSession } from '../net/session.js?v=1791274956';
+
+// In-app browser guard: KakaoTalk/etc. popups die when swiped away, killing
+// multiplayer. iOS can't force-open Safari from JS, so detect and guide.
+const INAPP_RE = /KAKAOTALK|Instagram|FBAN|FBAV|FB_IAB|Line\/|NAVER|DaumApp|Whale|MiuiBrowser/i;
+function showInAppGuide() {
+  try {
+    const ua = navigator.userAgent || '';
+    if (!INAPP_RE.test(ua) || sessionStorage.getItem('inapp-dismissed')) return;
+    const bar = document.createElement('div');
+    bar.id = 'inappbar';
+    bar.innerHTML = `<div><b>📱 Safari에서 열어주세요</b><br><small>인앱 브라우저(팝업)는 실수로 내리면 게임 연결이 끊겨요.<br>메뉴(•••) → 'Safari로 열기' 또는 '다른 브라우저로 열기'를 눌러주세요.</small></div>
+      <button id="inapp-copy">URL 복사</button><button id="inapp-x" aria-label="닫기">✕</button>`;
+    document.body.prepend(bar);
+    document.getElementById('inapp-x').onclick = () => {
+      bar.remove();
+      try { sessionStorage.setItem('inapp-dismissed', '1'); } catch {}
+    };
+    document.getElementById('inapp-copy').onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(location.href);
+        document.getElementById('inapp-copy').textContent = '복사됨!';
+      } catch {}
+    };
+  } catch {}
+}
+showInAppGuide();
 
 const params = new URLSearchParams(location.search);
 const AI_DELAY = params.has('fast') ? 0 : 1600; // ?fast=1 skips the pacing delay (tests)
@@ -48,6 +75,9 @@ let recordsOpen = false;
 let chalOpen = false;
 let tutorial = null; // { step } — guided first-game tutorial
 let optionsOpen = false;
+let net = null; // NetSession while in multiplayer menu/lobby/game
+let netNotice = ''; // one-shot notice shown on the start/net screen
+let netHelpOpen = false;
 const storage = browserStorage();
 const options = loadOptions(storage);
 
@@ -62,7 +92,19 @@ function setHTML(id, html) {
 function render() {
   checkChallenge();
   if (ctrl) for (const [id, fn] of Object.values(regions)) setHTML(id, fn(ctrl));
-  let overlay = !ctrl ? V.startHTML({ save: loadSave(storage, CARDS), dex: loadDex(storage), cards: CARDS, options }) : ctrl.finished ? V.endHTML(ctrl) : '';
+  let overlay;
+  if (netHelpOpen && net) {
+    overlay = V.netHelpHTML();
+  } else if (net && !ctrl) {
+    overlay = V.netHTML(net, netNotice);
+    netNotice = '';
+  } else if (net && ctrl && !ctrl.finished && net.dropped && Object.keys(net.dropped).length > 0) {
+    overlay = V.rejoinWaitHTML(net);
+    netNotice = '';
+  } else {
+    overlay = !ctrl ? V.startHTML({ save: loadSave(storage, CARDS), dex: loadDex(storage), cards: CARDS, options, notice: netNotice }) : ctrl.finished ? V.endHTML(ctrl) : '';
+    netNotice = '';
+  }
   if (ctrl?.challengeDone) overlay = V.challengeEndHTML(ctrl.challengeDone === 'won', ctrl.challenge);
   if (dexOpen) overlay = V.dexHTML(loadDex(storage), CARDS);
   else if (rulesOpen) overlay = V.rulesHTML();
@@ -88,6 +130,10 @@ function checkChallenge() {
 
 function scheduleAI() {
   if (aiTimer || !ctrl || ctrl.finished || ctrl.isHumanTurn) return;
+  // In multiplayer, only the host acts for AI seats; guests wait for the relay.
+  if (net && net.phase === 'playing' && net.role !== 'host') return;
+  // Only schedule when it's actually an AI's turn (no polling during humans' turns).
+  if (!ctrl.game.players[ctrl.game.current].isAI) return;
   aiTimer = setTimeout(() => {
     aiTimer = null;
     if (ctrl) {
@@ -227,6 +273,36 @@ function resumeGame() {
   render();
 }
 
+// ---------- multiplayer ----------
+
+function openNet() {
+  if (net) return;
+  net = new NetSession({
+    onRender: () => render(),
+    onGameStart: (c) => {
+      clearTimeout(aiTimer); aiTimer = null;
+      ctrl = c;
+      Object.keys(cache).forEach((k) => delete cache[k]);
+      window.__ctrl = ctrl; // debugging / automated tests
+      render();
+    },
+    onGameEnd: () => { net = null; ctrl = null; render(); },
+    onNotice: (msg) => { netNotice = msg; render(); },
+  });
+  net.myName = options.playerName || ''; // pre-fill saved name
+  render();
+}
+
+function savePlayerName(name) {
+  const clean = String(name || '').trim().slice(0, 12);
+  if (clean && clean !== options.playerName) {
+    options.playerName = clean;
+    saveOptions(storage, options);
+  }
+}
+
+const netInputVal = (id) => document.getElementById(id)?.value ?? '';
+
 function startTutorial() {
   startGame('나');
   tutorial = { step: 0 };
@@ -297,8 +373,44 @@ document.addEventListener('click', (e) => {
       }
       break;
     case 'opp': ctrl.openOpp(d.id); break;
-    case 'view-card': ctrl.viewCard(d.card); break;
-    case 'restart': ctrl = null; tutorial = null; optionsOpen = false; clearTimeout(aiTimer); aiTimer = null; break;
+    case 'view-card':
+      ctrl.viewCard(d.card, d.from === 'opp' ? { kind: 'opp', playerId: Number(d.pid) } : null);
+      break;
+    case 'view-back': {
+      const from = ctrl.sheet && ctrl.sheet.from;
+      ctrl.sheet = from || null;
+      break;
+    }
+    case 'restart':
+      if (net) net.end();
+      ctrl = null; tutorial = null; optionsOpen = false; clearTimeout(aiTimer); aiTimer = null; break;
+    // ----- multiplayer -----
+    case 'net': openNet(); break;
+    case 'net-menu': if (net) { net.phase = 'menu'; netNotice = ''; } break;
+    case 'net-host': if (net) { net.usePeer = true; net.phase = 'hostname'; netNotice = ''; } break;
+    case 'net-join': if (net) { net.usePeer = true; net.phase = 'guestname'; netNotice = ''; } break;
+    case 'net-manual': if (net) { net.usePeer = false; net.phase = 'menu'; netNotice = '수동 연결 모드: 코드를 두 번 주고받아야 해요.'; } break;
+    case 'net-peer': if (net) { net.usePeer = true; net.phase = 'menu'; netNotice = ''; } break;
+    case 'net-ai': if (net) {
+      const n = Math.max(0, Math.min(4 - net.names.length, Number(d.n) || 0));
+      net.aiCount = n;
+      netNotice = '';
+    } break;
+    case 'net-help': netHelpOpen = true; break;
+    case 'net-help-close': netHelpOpen = false; break;
+    case 'net-host-create': if (net) { netNotice = ''; net.hostCreate(savePlayerName(netInputVal('netname'))); return; } break;
+    case 'net-host-invite': if (net) { netNotice = ''; net.hostInvite(); return; } break;
+    case 'net-host-accept': if (net) { netNotice = ''; net.hostAcceptAnswer(netInputVal('netanswer')); return; } break;
+    case 'net-host-lobby': if (net) { net.phase = 'hostlobby'; netNotice = ''; } break;
+    case 'net-host-start': if (net) { netNotice = ''; net.hostStart(); } break;
+    case 'net-guest-next': if (net) { net.myName = savePlayerName(netInputVal('netname')); net.phase = 'guestjoin'; netNotice = ''; } break;
+    case 'net-guest-join': if (net) { netNotice = ''; net.guestJoin(net.myName, netInputVal('netoffer')); return; } break;
+    case 'net-copy': {
+      const t = document.getElementById(d.from);
+      if (t) { t.select(); try { navigator.clipboard.writeText(t.value); netNotice = '복사됐어요.'; } catch { netNotice = '복사가 안 되면 직접 드래그해서 복사해주세요.'; } }
+      break;
+    }
+    case 'net-leave': if (net) { netHelpOpen = false; net.end(); return; } break;
     case 'tutorial': startTutorial(); return;
     case 'tut-next': tutAdvance(); return;
     case 'tut-done': tutorial = null; break;

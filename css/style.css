@@ -51,7 +51,7 @@ img { image-rendering: pixelated; }
 .opponents { display: flex; gap: 8px; padding: 10px 12px; }
 .opp { flex: 1; min-width: 0; background: var(--panel); padding: 8px 4px; text-align: center; }
 .opp.active { outline: 3px solid var(--gold); outline-offset: 1px; }
-.opp .nm { font-size: 11px; margin-bottom: 4px; color: #a5b4fc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opp .nm { font-size: 11px; margin-bottom: 4px; color: #a5b4fc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; }
 .opp .sc { font-size: 20px; color: var(--gold); text-shadow: 2px 2px 0 var(--ink); }
 .opp .meta { font-size: 9px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
 .pips { display: flex; gap: 2px; justify-content: center; margin-top: 3px; }
@@ -394,3 +394,70 @@ button.mp { cursor: pointer; }
 .titlebanner img { width: 100%; display: block; border: 3px solid var(--ink); image-rendering: auto; }
 .titletxt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 26px; font-weight: 900; color: #ffd166; text-shadow: 2px 2px 0 #3b2f0b, -1px -1px 0 #3b2f0b, 1px -1px 0 #3b2f0b, -1px 1px 0 #3b2f0b, 0 0 12px rgba(255,209,102,.6); letter-spacing: 1px; }
 .titletxt small { font-size: 10px; color: #e8e0c8; font-weight: 400; letter-spacing: 2px; margin-top: 4px; text-shadow: 1px 1px 0 #000; }
+
+/* ---------- hero faces ---------- */
+.tface { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; vertical-align: middle; margin-right: 4px; border: 2px solid var(--ink); image-rendering: auto; }
+.tface.big { width: 44px; height: 44px; }
+.tileface { display: block; width: 56px; height: 56px; margin: 0 auto 8px; border: 3px solid var(--ink); border-radius: 8px; object-fit: cover; }
+button.orsv { cursor: pointer; width: 100%; text-align: left; font: inherit; }
+button.orsv:hover { border-color: #4ade80; }
+
+/* ---------- multiplayer lobby ---------- */
+.netpanel { max-width: 480px; }
+.netinput {
+  width: 100%; box-sizing: border-box; padding: 10px; font-size: 16px;
+  border: 3px solid var(--ink, #1a1a2e); border-radius: 8px; margin: 8px 0;
+  font-family: inherit;
+}
+.netcode {
+  width: 100%; box-sizing: border-box; min-height: 84px; padding: 8px; font-size: 11px;
+  font-family: monospace; word-break: break-all;
+  border: 3px solid var(--ink, #1a1a2e); border-radius: 8px; margin: 4px 0 8px;
+  background: #f4f4f8; color: #1a1a2e; resize: vertical;
+}
+.roster { margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
+.roster-row {
+  background: #2a2a45; border: 3px solid #1a1a2e; border-radius: 8px;
+  padding: 8px 12px; font-size: 15px; color: #fff;
+}
+.netbadge {
+  font-size: 12px; color: #fef3c7; background: #3b2f0b;
+  border: 2px solid #fbbf24; border-radius: 6px; padding: 2px 8px; margin-left: 8px;
+  display: inline-block;
+}
+.shortcode {
+  text-align: center; background: #1a1a2e; border: 3px solid #fbbf24; border-radius: 12px;
+  padding: 12px; margin: 8px 0; color: #fef3c7;
+}
+.shortcode span { display: block; font-size: 12px; color: #a8a8c0; margin-bottom: 4px; }
+.shortcode b { font-size: 36px; letter-spacing: 8px; font-family: monospace; }
+.netinput.code {
+  text-align: center; font-size: 28px; letter-spacing: 6px; font-family: monospace;
+  text-transform: uppercase;
+}
+.airow {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: #2a2a45; border: 3px solid #1a1a2e; border-radius: 8px;
+  padding: 8px 12px; margin: 8px 0; font-size: 14px; color: #fff;
+}
+.aibtns { display: flex; gap: 6px; }
+.aibtn {
+  border: 2px solid #1a1a2e; border-radius: 6px; background: #4a4a6a; color: #fff;
+  padding: 6px 12px; font-size: 13px; cursor: pointer; font-family: inherit;
+}
+.aibtn.sel { background: #fbbf24; color: #1a1a2e; font-weight: bold; }
+
+/* ---------- in-app browser guide ---------- */
+#inappbar {
+  position: sticky; top: 0; z-index: 999;
+  display: flex; gap: 8px; align-items: center;
+  background: #7c2d12; color: #fff; border-bottom: 3px solid #1a1a2e;
+  padding: 10px 12px; font-size: 13px; line-height: 1.4;
+}
+#inappbar small { color: #fed7aa; }
+#inappbar button {
+  flex-shrink: 0; border: 2px solid #1a1a2e; border-radius: 6px;
+  background: #fbbf24; color: #1a1a2e; font-weight: bold; padding: 6px 10px;
+  font-size: 13px; cursor: pointer;
+}
+#inapp-x { background: transparent !important; color: #fff !important; border: none !important; font-size: 16px !important; }

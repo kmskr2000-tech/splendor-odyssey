@@ -5,8 +5,8 @@
 import {
   COLORS, MASTER, PHASES, MAX_HAND,
   createGame, applyAction, legalActions, computePayment, evolveOptions, getCurrentPlayer, tokenCount,
-} from '../core/index.js?v=1791269756';
-import { chooseAction } from '../ai/heuristic.js?v=1791269756';
+} from '../core/index.js?v=1791274956';
+import { chooseAction } from '../ai/heuristic.js?v=1791274956';
 
 export const BALLS = {
   monster: { file: 'ball-thunder', ext: 'webp', name: '천둥의 가호', short: '천둥' },
@@ -53,18 +53,28 @@ function secretPersonalities(seed, playerCount) {
 // `resume` ({ game, log }) restores a saved game instead of dealing a new one.
 // `hooks.onCatch(cardId, kind)` fires for the human's captures/evolutions, `hooks.onChange()` after
 // every accepted action, `hooks.onEnd(won)` once when the game finishes (persistence lives outside).
-export function createController({ cards, seed, humanName = '나', aiNames = ['다이달로스', '아가멤논', '파트로클로스'], resume = null, hooks = {}, difficulty = 'normal', challenge = null }) {
+export function createController({ cards, seed, humanName = '나', aiNames = ['다이달로스', '아가멤논', '파트로클로스'], resume = null, hooks = {}, difficulty = 'normal', challenge = null, mp = null }) {
   const cardsById = new Map(cards.map((c) => [c.id, c]));
+  // mp: { names: [...humanNames], me: index, aiNames: [...] } — multiplayer.
+  // Humans first, then AI seats (acted by the host, relayed to guests).
+  const mpPlayers = mp ? [
+    ...mp.names.map((name) => ({ name, isAI: false })),
+    ...((mp.aiNames || []).map((name) => ({ name, isAI: true }))),
+  ] : null;
+  const playerCount = mpPlayers ? mpPlayers.length : 1 + aiNames.length;
   const game = resume?.game ?? createGame({
     cards,
     seed,
-    players: [{ name: humanName, isAI: false }, ...aiNames.map((name) => ({ name, isAI: true }))],
+    players: mpPlayers ?? [{ name: humanName, isAI: false }, ...aiNames.map((name) => ({ name, isAI: true }))],
   });
+  // createGame only copies whitelisted fields; re-attach the remote flag for mp humans.
+  if (mp) game.players.forEach((p, i) => { p.remote = !p.isAI && i !== mp.me; });
 
   const ctrl = {
     game,
     cardsById,
-    human: 0,
+    human: mp ? mp.me : 0,
+    mp: mp ? { names: mp.names, me: mp.me } : null, // multiplayer session info
     balls: [], // selected supply colors (a repeated color means "take two")
     discard: {}, // token map selected for return
     sheet: null, // { kind: 'card', cardId } | { kind: 'deck', tier } | { kind: 'opp', playerId }
@@ -79,7 +89,7 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
     challengeDone: null, // 'won' | 'lost' once the challenge resolves
     humanTurns: 0, // completed turns by the human (for challenge limits)
     // Secret AI personalities: shuffled per game, hidden from the player.
-    aiPersonalities: resume?.aiPersonalities ?? secretPersonalities(seed, 1 + aiNames.length),
+    aiPersonalities: resume?.aiPersonalities ?? secretPersonalities(seed, playerCount),
     errors: 0, // failed applyAction calls (tests assert 0 for UI-generated actions)
 
     get state() { return this.game; },
@@ -205,8 +215,8 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
     openOpp(playerId) {
       this.sheet = { kind: 'opp', playerId: Number(playerId) };
     },
-    viewCard(cardId) {
-      if (this.cardsById.has(cardId)) this.sheet = { kind: 'view', cardId };
+    viewCard(cardId, from = null) {
+      if (this.cardsById.has(cardId)) this.sheet = { kind: 'view', cardId, from };
     },
     closeSheet() { this.sheet = null; },
 

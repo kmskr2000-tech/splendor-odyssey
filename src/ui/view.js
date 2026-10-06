@@ -1,12 +1,12 @@
 // Pure HTML-string renderers. Each takes the controller and returns markup; main.js owns the DOM.
 // All text interpolated here comes from our own card data / constants (no user input).
 
-import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791269756';
-import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791269756';
-import { BALLS, TRAINERS, evoText } from './controller.js?v=1791269756';
-import { dexSummary } from '../storage/store.js?v=1791269756';
-import { ACHIEVEMENTS } from '../data/achievements.js?v=1791269756';
-import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791269756';
+import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791274956';
+import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791274956';
+import { BALLS, TRAINERS, evoText } from './controller.js?v=1791274956';
+import { dexSummary } from '../storage/store.js?v=1791274956';
+import { ACHIEVEMENTS } from '../data/achievements.js?v=1791274956';
+import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791274956';
 
 const diffLabel = { easy: '쉬움', normal: '보통', hard: '어려움' };
 
@@ -15,6 +15,16 @@ export const ballSrc = (key) => `${ASSET}/items/${BALLS[key].file}.${BALLS[key].
 const mythSrc = (id) => `${ASSET}/myth/${id}.webp`;
 
 const ballImg = (key, cls = 'miniball') => `<img class="${cls}" src="${ballSrc(key)}" alt="${BALLS[key].name}">`;
+// AI 영웅 얼굴 (다이달로스 등). 멀티플레이 인간 이름에는 없음.
+const HERO_FACE = {
+  '다이달로스': 'hero-daidalos',
+  '아가멤논': 'hero-agamemnon',
+  '파트로클로스': 'hero-patroklos',
+  '네스토르': 'hero-nestor',
+};
+export const heroFaceSrc = (name) => HERO_FACE[name] ? `${ASSET}/heroes/${HERO_FACE[name]}.webp` : null;
+// Escape user-supplied text (multiplayer names). Card data is trusted; names are not.
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const staticSprite = (card, cls = 'tiny') => `<img class="${cls}" src="${mythSrc(card.id)}" alt="">`;
 const animSprite = (card) =>
   `<img class="sprite" src="${ASSET}/anim/${card.id}.gif" onerror="this.onerror=null;this.src='${mythSrc(card.id)}'" alt="${card.name}">`;
@@ -77,10 +87,12 @@ export function headerHTML(ctrl) {
   else if (ctrl.isHumanTurn) badge = '▶ 당신의 차례';
   else badge = `${ctrl.current.name} 차례`;
   const last = ctrl.lastRound ? `<div class="lastround">마지막 라운드! ${s.players[s.endTriggeredBy].name}이(가) 18점 달성</div>` : '';
+  const netbadge = ctrl.mp ? `<div class="netbadge">📡 대전 ${ctrl.mp.names.length}인</div>` : '';
   return `<div class="header">
       <div class="title">스플렌더: 오디세이아<small>SPLENDOR: ODYSSEY · DOT EDITION</small></div>
       <button class="rulesbtn" data-action="rules">룰 설명</button>
       <button class="rulesbtn opt" data-action="options" aria-label="설정">⚙</button>
+      ${netbadge}
       <div class="turn ${ctrl.isHumanTurn ? 'mine' : ''}">${badge}</div>
     </div>${last}`;
 }
@@ -97,7 +109,7 @@ export function opponentsHTML(ctrl) {
       .map((k) => `<span class="otp">${ballImg(k, 'mini2')}${p.tokens[k]}</span>`).join('');
     return `
     <button class="opp px ${s.current === p.id && !ctrl.finished ? 'active' : ''}" data-action="opp" data-id="${p.id}">
-      <div class="nm">AI ${p.name}</div>
+      <div class="nm">${heroFaceSrc(p.name) ? `<img class="tface" src="${heroFaceSrc(p.name)}" alt="">` : ''}${p.isAI ? 'AI ' : '📡 '}${esc(p.name)}</div>
       <div class="sc">${getPoints(p)}</div>
       <div class="olbl2">보너스(할인)</div>
       <div class="pips">${bonusPips(p)}</div>
@@ -259,13 +271,13 @@ function oppSheetHTML(p, ctrl) {
     const list = p.tableau.filter((card) => bonusList(card)[0] === c);
     if (!list.length) return '';
     return `<div class="grp g-${c}">${list.map((card) => `
-      <span class="mp">${staticSprite(card)}<span>${card.name}${card.points ? ` <i>${card.points}점</i>` : ''}</span></span>`).join('')}</div>`;
+      <button class="mp" data-action="view-card" data-card="${card.id}" data-from="opp" data-pid="${p.id}">${staticSprite(card)}<span>${card.name}${card.points ? ` <i>${card.points}점</i>` : ''}</span></button>`).join('')}</div>`;
   }).join('');
   const hand = p.hand.length
-    ? p.hand.map((card) => `<div class="orsv">${staticSprite(card)}${card.name} <small>${tierLabel[card.tier]}${card.points ? ` · ${card.points}점` : ''}</small></div>`).join('')
+    ? p.hand.map((card) => `<button class="orsv" data-action="view-card" data-card="${card.id}" data-from="opp" data-pid="${p.id}">${staticSprite(card)}${card.name} <small>${tierLabel[card.tier]}${card.points ? ` · ${card.points}점` : ''}</small></button>`).join('')
     : '<div class="empty-note">없음</div>';
   return `<div class="sheet-back" data-action="close"></div><div class="sheet wide">
-    <div class="sheet-title">AI ${p.name} <small>· ${getPoints(p)}점 · 신격화 ${p.evolved.length}회</small></div>
+    <div class="sheet-title">${heroFaceSrc(p.name) ? `<img class="tface big" src="${heroFaceSrc(p.name)}" alt="">` : ''}${p.isAI ? 'AI ' : '📡 '}${esc(p.name)} <small>· ${getPoints(p)}점 · 신격화 ${p.evolved.length}회</small></div>
     <div class="olbl">■ 보너스 (할인)</div>
     <div class="pips big">${COLORS.map((c) => `<span class="pip d-${c}">${ballImg(c, 'mini2')}${b[c]}</span>`).join('')}</div>
     <div class="olbl">■ 가진 가호 (${tokenCount(p)}/10)</div>
@@ -301,6 +313,8 @@ export function sheetHTML(ctrl) {
   if (sh.kind === 'view') {
     const card = ctrl.cardsById.get(sh.cardId);
     if (!card) return '';
+    const backBtn = sh.from && sh.from.kind === 'opp'
+      ? `<button class="btn alt" data-action="view-back">← 상대 정보로</button>` : '';
     return `<div class="sheet-back" data-action="close"></div><div class="sheet">
       <div class="sheet-card">${cardHTML(card, ctrl, { interactive: false })}</div>
       <div class="sheet-info">
@@ -310,7 +324,7 @@ export function sheetHTML(ctrl) {
         <div class="paylbl">신격화 정보</div>
         <div class="evoinfo">${evoText(card, ctrl.cardsById)}</div>
       </div>
-      <div class="btnrow"><button class="btn primary" data-action="close">닫기</button></div></div>`;
+      <div class="btnrow">${backBtn}<button class="btn primary" data-action="close">닫기</button></div></div>`;
   }
   if (sh.kind === 'deck') {
     return `<div class="sheet-back" data-action="close"></div><div class="sheet">
@@ -347,7 +361,7 @@ export function sheetHTML(ctrl) {
     </div></div>`;
 }
 
-export function startHTML({ save = null, dex = null, cards = [], options = null } = {}) {
+export function startHTML({ save = null, dex = null, cards = [], options = null, notice = '' } = {}) {
   const sum = dex ? dexSummary(dex, cards) : null;
   const diff = options?.difficulty ?? 'normal';
   const resume = save
@@ -356,8 +370,9 @@ export function startHTML({ save = null, dex = null, cards = [], options = null 
   return `<div class="overlay"><div class="panel">
     <div class="titlebanner"><img src="assets/title-logo.webp" alt="스플렌더: 오디세이아"><div class="titletxt">스플렌더: 오디세이아<small>SPLENDOR: ODYSSEY · DOT EDITION</small></div></div>
     <p class="sheet-p">영웅을 골라 AI 3명과 4인전을 시작해요.<br>신화를 먼저 완성(18점)하는 영웅이 승리!</p>
+    ${notice ? `<p class="sheet-p warn">${esc(notice)}</p>` : ''}
     ${resume}
-    <div class="tiles">${TRAINERS.map((t, i) => `<button class="tile t${i}" data-action="start" data-name="${t}"><span class="tilebox"></span>${t}</button>`).join('')}</div>
+    <div class="tiles">${TRAINERS.map((t, i) => `<button class="tile t${i}" data-action="start" data-name="${t}">${heroFaceSrc(t) ? `<img class="tileface" src="${heroFaceSrc(t)}" alt="">` : `<span class="tilebox"></span>`}${t}</button>`).join('')}</div>
     <div class="difflabel">AI 난이도</div>
     <div class="diffrow">
       ${[['easy', '쉬움'], ['normal', '보통'], ['hard', '어려움']].map(([v, l]) =>
@@ -372,6 +387,7 @@ export function startHTML({ save = null, dex = null, cards = [], options = null 
     <button class="btn alt" data-action="records">📊 기록</button>
     <button class="btn alt" data-action="challenge">🎯 챌린지</button></div>
     <div class="btnrow"><button class="btn primary" data-action="tutorial">튜토리얼 (처음 하세요?)</button></div>
+    <div class="btnrow"><button class="btn primary" data-action="net">📡 대전 (2~4인 멀티플레이)</button></div>
   </div></div>`;
 }
 
@@ -550,5 +566,131 @@ export function challengeEndHTML(won, challenge) {
     <p class="sheet-p">${won ? '목표를 달성했어요! 🎉' : `목표: ${challenge.desc}`}</p>
     <div class="btnrow"><button class="btn alt" data-action="challenge">다른 챌린지</button>
     <button class="btn primary" data-action="restart">타이틀로</button></div>
+  </div></div>`;
+}
+export function netHelpHTML() {
+  return `<div class="overlay"><div class="panel netpanel">
+    <div class="title">📡 대전 방법</div>
+    <div class="rules">
+      <h4>■ 연결하기 (2~4인)</h4>
+      <p>① 한 명이 <b>[방 만들기]</b>를 누르면 6자리 방 코드가 나와요.<br>
+      ② 친구에게 코드를 알려주세요 (카톡, 문자 등).<br>
+      ③ 친구는 <b>[참가하기]</b> → 코드 6자리 입력 → 연결 완료!<br>
+      ④ 2~4명이 모이면 방장이 <b>[게임 시작]</b>을 눌러요.</p>
+      <h4>■ 알아두면 좋아요</h4>
+      <p>• 같은 와이파이가 아니어도 돼요. 인터넷만 되면 OK.<br>
+      • 카톡 인앱 브라우저(팝업)보다 Safari·Chrome 앱에서 열면 안정적이에요.<br>
+      • 실수로 나가도 60초 안에 같은 코드로 들어오면 이어서 할 수 있어요.<br>
+      • 방장이 나가면 게임이 끝나요.<br>
+      • 인원이 부족하면 남는 자리를 AI로 채울 수 있어요 (방장 로비에서 선택).<br>
+      • 각자 자기 차례에만 둘 수 있어요.</p>
+    </div>
+    <div class="btnrow"><button class="btn primary" data-action="net-help-close">닫기</button></div>
+  </div></div>`;
+}
+
+export function rejoinWaitHTML(net) {
+  const rows = Object.keys(net.dropped || {}).map((k) => {
+    const name = net.names[Number(k)] || '게스트';
+    const left = net.dropped[k].left;
+    return `<div class="roster-row">📡 ${esc(name)} 재연결 대기 중… ${left}초</div>`;
+  }).join('');
+  return `<div class="overlay"><div class="panel netpanel">
+    <div class="title">📡 재연결 대기 중</div>
+    <div class="roster">${rows}</div>
+    <p class="sheet-p">다시 들어오면 이어서 할 수 있어요.<br><small>방 코드: ${esc(net.shortCode)} (친구에게 알려주세요)</small></p>
+  </div></div>`;
+}
+
+export function netHTML(net, notice = '') {
+  const roster = net.names.map((name, i) =>
+    `<div class="roster-row">${i === 0 ? '👑' : '🎮'} ${esc(name)}${i === net.myIndex ? ' (나)' : ''}</div>`).join('');
+  let body = '';
+  switch (net.phase) {
+    case 'menu': {
+      const modeBtn = net.usePeer
+        ? '<button class="btn ghost" data-action="net-manual">수동 연결 (서버 없이)</button>'
+        : '<button class="btn ghost" data-action="net-peer">간편 연결로 돌아가기</button>';
+      body = `<p class="sheet-p">친구와 대전해요.<br>${net.usePeer ? '방 코드 6자리만 입력하면 바로 연결돼요.' : '서버 없이 폰끼리 직접 연결돼요.'} (2~4인)</p>
+        <div class="btnrow"><button class="btn primary" data-action="net-host">방 만들기</button>
+        <button class="btn primary" data-action="net-join">참가하기</button></div>
+        <div class="btnrow">${modeBtn}
+        <button class="btn ghost" data-action="net-help">❓ 대전 방법</button></div>
+        <div class="btnrow"><button class="btn ghost" data-action="net-leave">닫기</button></div>`;
+      break;
+    }
+    case 'hostname':
+      body = `<p class="sheet-p">대전에서 쓸 이름을 입력하세요.<br><small>한 번 정하면 다음부터 자동 입력돼요.</small></p>
+        <input id="netname" class="netinput" maxlength="12" placeholder="이름" value="${esc(net.myName)}">
+        <div class="btnrow"><button class="btn primary" data-action="net-host-create">방 만들기</button>
+        <button class="btn ghost" data-action="net-menu">뒤로</button></div>`;
+      break;
+    case 'busy':
+      body = `<p class="sheet-p">연결 중이에요...</p>`;
+      break;
+    case 'hostoffer':
+      body = `${roster ? `<div class="roster">${roster}</div>` : ''}
+        <p class="sheet-p">이 코드를 친구에게 보내주세요 (카톡 복붙).</p>
+        <textarea class="netcode" readonly id="netoffer">${net.offerCode}</textarea>
+        <div class="btnrow"><button class="btn alt" data-action="net-copy" data-from="netoffer">📋 복사</button></div>
+        <p class="sheet-p">친구가 준 코드를 아래에 붙여넣고 연결하세요.</p>
+        <textarea class="netcode" id="netanswer" placeholder="친구의 코드 붙여넣기"></textarea>
+        <div class="btnrow"><button class="btn primary" data-action="net-host-accept">연결하기</button>
+        ${net.names.length > 1 ? '<button class="btn alt" data-action="net-host-lobby">로비로</button>' : ''}
+        <button class="btn ghost" data-action="net-leave">나가기</button></div>`;
+      break;
+    case 'hostlobby': {
+      const codeHtml = net.usePeer && net.shortCode
+        ? `<div class="shortcode"><span>방 코드</span><b>${esc(net.shortCode)}</b></div>
+           <p class="sheet-p">친구에게 이 6자리 코드를 알려주세요.</p>`
+        : '';
+      const maxAi = Math.max(0, 4 - net.names.length);
+      const aiBtns = [0, 1, 2, 3].filter((n) => n <= maxAi).map((n) =>
+        `<button class="aibtn ${net.aiCount === n ? 'sel' : ''}" data-action="net-ai" data-n="${n}">${n === 0 ? '없음' : n + '명'}</button>`).join('');
+      const total = net.names.length + net.aiCount;
+      body = `${codeHtml}<div class="roster">${roster}</div>
+        ${maxAi > 0 ? `<div class="airow"><span>🤖 남는 자리 AI로 채우기 <small>(어려움)</small></span><div class="aibtns">${aiBtns}</div></div>` : ''}
+        <p class="sheet-p">${net.names.length}명${net.aiCount ? ` + AI ${net.aiCount}명` : ''} (총 ${total}인)</p>
+        <div class="btnrow">
+        ${!net.usePeer && net.names.length < 4 ? '<button class="btn alt" data-action="net-host-invite">➕ 게스트 초대</button>' : ''}
+        <button class="btn primary" data-action="net-host-start" ${total < 2 ? 'disabled' : ''}>게임 시작</button>
+        <button class="btn ghost" data-action="net-leave">나가기</button></div>`;
+      break;
+    }
+    case 'guestname':
+      body = `<p class="sheet-p">대전에서 쓸 이름을 입력하세요.<br><small>한 번 정하면 다음부터 자동 입력돼요.</small></p>
+        <input id="netname" class="netinput" maxlength="12" placeholder="이름" value="${esc(net.myName)}">
+        <div class="btnrow"><button class="btn primary" data-action="net-guest-next">다음</button>
+        <button class="btn ghost" data-action="net-menu">뒤로</button></div>`;
+      break;
+    case 'guestjoin':
+      body = net.usePeer
+        ? `<p class="sheet-p">방장이 알려준 6자리 코드를 입력하세요.</p>
+        <input id="netoffer" class="netinput code" maxlength="6" placeholder="예: KQ7X2P" autocomplete="off" autocapitalize="characters">
+        <div class="btnrow"><button class="btn primary" data-action="net-guest-join">참가하기</button>
+        <button class="btn ghost" data-action="net-menu">뒤로</button></div>`
+        : `<p class="sheet-p">방장이 준 코드를 붙여넣으세요.</p>
+        <textarea class="netcode" id="netoffer" placeholder="방장의 코드 붙여넣기"></textarea>
+        <div class="btnrow"><button class="btn primary" data-action="net-guest-join">참가하기</button>
+        <button class="btn ghost" data-action="net-menu">뒤로</button></div>`;
+      break;
+    case 'guestanswer':
+      body = `<p class="sheet-p">이 코드를 방장에게 보내주세요.<br>방장이 입력하면 자동으로 연결돼요.</p>
+        <textarea class="netcode" readonly id="netanswer2">${net.answerCode}</textarea>
+        <div class="btnrow"><button class="btn alt" data-action="net-copy" data-from="netanswer2">📋 복사</button>
+        <button class="btn ghost" data-action="net-leave">나가기</button></div>`;
+      break;
+    case 'guestlobby':
+      body = `<div class="roster">${roster}</div>
+        <p class="sheet-p">방장이 게임을 시작하기를 기다리는 중...</p>
+        <div class="btnrow"><button class="btn ghost" data-action="net-leave">나가기</button></div>`;
+      break;
+    default:
+      body = '';
+  }
+  return `<div class="overlay"><div class="panel netpanel">
+    <div class="title">📡 대전 <small>멀티플레이</small></div>
+    ${notice ? `<p class="sheet-p warn">${esc(notice)}</p>` : ''}
+    ${body}
   </div></div>`;
 }
