@@ -13,14 +13,14 @@ try {
   }
 } catch (e) { /* 버전 확인 실패 시 조용히 진행 */ }
 
-import { CARDS } from '../data/cards.js?v=1791276374';
-import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791276374';
-import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791276374';
-import { createController } from './controller.js?v=1791276374';
-import * as V from './view.js?v=1791276374';
-import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791276374';
-import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal } from '../storage/store.js?v=1791276374';
-import { NetSession } from '../net/session.js?v=1791276374';
+import { CARDS } from '../data/cards.js?v=1791279718';
+import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791279718';
+import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791279718';
+import { createController } from './controller.js?v=1791279718';
+import * as V from './view.js?v=1791279718';
+import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791279718';
+import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal } from '../storage/store.js?v=1791279718';
+import { NetSession } from '../net/session.js?v=1791279718';
 
 // In-app browser guard: KakaoTalk/etc. popups die when swiped away, killing
 // multiplayer. iOS can't force-open Safari from JS, so detect and guide.
@@ -79,6 +79,7 @@ let net = null; // NetSession while in multiplayer menu/lobby/game
 let netNotice = ''; // one-shot notice shown on the start/net screen
 let netHelpOpen = false;
 let introDone = false; // intro splash shown once per page load
+let modeDone = false; // mode select (single vs multiplayer) shown after intro
 const storage = browserStorage();
 const options = loadOptions(storage);
 
@@ -96,6 +97,8 @@ function render() {
   let overlay;
   if (!introDone) {
     overlay = V.introHTML();
+  } else if (!modeDone && !ctrl) {
+    overlay = V.modeHTML();
   } else if (netHelpOpen && net) {
     overlay = V.netHelpHTML();
   } else if (net && !ctrl) {
@@ -351,6 +354,9 @@ document.addEventListener('click', (e) => {
   const d = el.dataset;
   switch (d.action) {
     case 'intro-tap': introDone = true; break;
+    case 'mode-single': modeDone = true; break;
+    case 'mode-back': modeDone = false; break;
+    case 'mode-net': modeDone = true; openNet(); return;
     case 'start': startGame(d.name); return;
     case 'resume': resumeGame(); return;
     case 'dex': dexOpen = true; break;
@@ -387,7 +393,7 @@ document.addEventListener('click', (e) => {
     }
     case 'restart':
       if (net) net.end();
-      ctrl = null; tutorial = null; optionsOpen = false; clearTimeout(aiTimer); aiTimer = null; break;
+      ctrl = null; tutorial = null; optionsOpen = false; modeDone = false; clearTimeout(aiTimer); aiTimer = null; break;
     // ----- multiplayer -----
     case 'net': openNet(); break;
     case 'net-menu': if (net) { net.phase = 'menu'; netNotice = ''; } break;
@@ -414,7 +420,7 @@ document.addEventListener('click', (e) => {
       if (t) { t.select(); try { navigator.clipboard.writeText(t.value); netNotice = '복사됐어요.'; } catch { netNotice = '복사가 안 되면 직접 드래그해서 복사해주세요.'; } }
       break;
     }
-    case 'net-leave': if (net) { netHelpOpen = false; net.end(); return; } break;
+    case 'net-leave': if (net) { netHelpOpen = false; modeDone = false; net.end(); return; } break;
     case 'tutorial': startTutorial(); return;
     case 'tut-next': tutAdvance(); return;
     case 'tut-done': tutorial = null; break;

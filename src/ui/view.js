@@ -1,12 +1,12 @@
 // Pure HTML-string renderers. Each takes the controller and returns markup; main.js owns the DOM.
 // All text interpolated here comes from our own card data / constants (no user input).
 
-import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791276374';
-import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791276374';
-import { BALLS, TRAINERS, evoText } from './controller.js?v=1791276374';
-import { dexSummary } from '../storage/store.js?v=1791276374';
-import { ACHIEVEMENTS } from '../data/achievements.js?v=1791276374';
-import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791276374';
+import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791279718';
+import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791279718';
+import { BALLS, TRAINERS, evoText } from './controller.js?v=1791279718';
+import { dexSummary } from '../storage/store.js?v=1791279718';
+import { ACHIEVEMENTS } from '../data/achievements.js?v=1791279718';
+import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791279718';
 
 const diffLabel = { easy: '쉬움', normal: '보통', hard: '어려움' };
 
@@ -111,7 +111,7 @@ export function opponentsHTML(ctrl) {
     <button class="opp px ${s.current === p.id && !ctrl.finished ? 'active' : ''}" data-action="opp" data-id="${p.id}">
       <div class="nm">${heroFaceSrc(p.name) ? `<img class="tface" src="${heroFaceSrc(p.name)}" alt="">` : ''}${p.isAI ? 'AI ' : '📡 '}${esc(p.name)}</div>
       <div class="sc">${getPoints(p)}</div>
-      <div class="olbl2">보너스(할인)</div>
+      <div class="olbl2">가호(할인)</div>
       <div class="pips">${bonusPips(p)}</div>
       <div class="olbl2">가진 가호</div>
       <div class="otks2">${tk || '<span class="none">없음</span>'}</div>
@@ -183,7 +183,7 @@ export function meHTML(ctrl) {
       <div class="evcount">신격화 ${me.evolved.length}회</div>
     </div>
     <div class="mytokens">${tokensHTML(ctrl)}</div>
-    <div class="lbl">■ 보너스 (할인)</div>
+    <div class="lbl">■ 가호 (할인)</div>
     <div class="pips big">${COLORS.map((c) => `<span class="pip d-${c}">${ballImg(c, 'mini2')}${b[c]}</span>`).join('')}</div>
     <div class="lbl">■ 영입한 존재 (${me.tableau.length})</div>
     <div class="mypoke">${tableauHTML(ctrl)}</div>
@@ -213,7 +213,7 @@ export function actionBarHTML(ctrl) {
       const to = ctrl.cardsById.get(o.nextId);
       return `<button class="btn evo" data-action="evolve" data-card="${o.cardId}">${from.name} → ${to.name} 신격화</button>`;
     }).join('');
-    return `<div class="hint evohint">신격화할 수 있어요! 한 마리만 골라 신격화하거나 건너뛰세요.</div>${err}
+    return `<div class="hint evohint">신격화할 수 있어요! 한 장만 골라 신격화하거나 건너뛰세요.</div>${err}
       <div class="btnrow col">${opts}<button class="btn ghost" data-action="skip-evolve">신격화 안 함</button></div>`;
   }
   if (ctrl.canPass()) {
@@ -278,7 +278,7 @@ function oppSheetHTML(p, ctrl) {
     : '<div class="empty-note">없음</div>';
   return `<div class="sheet-back" data-action="close"></div><div class="sheet wide">
     <div class="sheet-title">${heroFaceSrc(p.name) ? `<img class="tface big" src="${heroFaceSrc(p.name)}" alt="">` : ''}${p.isAI ? 'AI ' : '📡 '}${esc(p.name)} <small>· ${getPoints(p)}점 · 신격화 ${p.evolved.length}회</small></div>
-    <div class="olbl">■ 보너스 (할인)</div>
+    <div class="olbl">■ 가호 (할인)</div>
     <div class="pips big">${COLORS.map((c) => `<span class="pip d-${c}">${ballImg(c, 'mini2')}${b[c]}</span>`).join('')}</div>
     <div class="olbl">■ 가진 가호 (${tokenCount(p)}/10)</div>
     <div class="otks">${tokens}</div>
@@ -319,7 +319,7 @@ export function sheetHTML(ctrl) {
       <div class="sheet-card">${cardHTML(card, ctrl, { interactive: false })}</div>
       <div class="sheet-info">
         <div class="sheet-title">${card.name}</div>
-        <div class="paylbl">보너스</div>
+        <div class="paylbl">가호</div>
         <div class="pay">${bonusList(card).map((b) => ballImg(b)).join(' ')}</div>
         <div class="paylbl">신격화 정보</div>
         <div class="evoinfo">${evoText(card, ctrl.cardsById)}</div>
@@ -350,7 +350,7 @@ export function sheetHTML(ctrl) {
     <div class="sheet-card">${cardHTML(card, ctrl, { interactive: false })}</div>
     <div class="sheet-info">
       <div class="sheet-title">${card.name}</div>
-      <div class="paylbl">내가 낼 가호 (보너스 할인 적용)</div>
+      <div class="paylbl">내가 낼 가호 (가호 할인 적용)</div>
       <div class="pay ${payCls}">${payText}</div>
       ${reserveNote ? `<div class="note">${reserveNote}</div>` : ''}
     </div>
@@ -364,14 +364,27 @@ export function sheetHTML(ctrl) {
 // ---------- intro splash (shown once per page load, before the title screen) ----------
 
 export function introHTML() {
+  const minis = ['legend-001', 'rare-001', 'm1-001'].map((id, i) =>
+    `<img class="intro-card ic${i}" src="${mythSrc(id)}" alt="">`).join('');
   return `<div class="intro" data-action="intro-tap">
     <div class="intro-inner">
-      <img class="intro-logo" src="assets/title-logo.webp" alt="Odyssey: The Card">
+      <div class="intro-cards">${minis}</div>
       <div class="intro-title">Odyssey: The Card</div>
-      <div class="intro-sub">신화의 가호를 모아 전설을 완성하라</div>
-      <div class="intro-tap">— TAP TO START —</div>
+      <div class="intro-rules">90장의 카드 · 6종의 가호<br>가호를 모아 카드를 영입하고<br>18점을 먼저 완성하라</div>
+      <div class="intro-tap">탭하여 시작</div>
     </div>
   </div>`;
+}
+
+export function modeHTML() {
+  return `<div class="overlay"><div class="panel modepanel">
+    <div class="titlebanner"><img src="assets/title-logo.webp" alt="Odyssey: The Card"><div class="titletxt">Odyssey: The Card<small>오디세이아 · DOT EDITION</small></div></div>
+    <p class="sheet-p">보드게임 <b>스플렌더</b>에서 영감을 받은 카드 수집 게임이에요.<br>가호를 모아 카드를 영입하고, 신화를 먼저 완성(18점)하세요!</p>
+    <div class="btnrow col modebtns">
+      <button class="btn primary modebtn" data-action="mode-single">⚔️ 싱글 모드<small>AI 3명과 4인전</small></button>
+      <button class="btn alt modebtn" data-action="mode-net">🌐 대전 모드<small>친구와 2~4인 멀티플레이</small></button>
+    </div>
+  </div></div>`;
 }
 
 export function startHTML({ save = null, dex = null, cards = [], options = null, notice = '' } = {}) {
@@ -393,14 +406,14 @@ export function startHTML({ save = null, dex = null, cards = [], options = null,
     </div>
     <p class="sheet-p">AI의 플레이 스타일(전문화·견제·균형)은 매 게임 랜덤으로 정해져요. 🤫</p>
     ${save ? '<p class="sheet-p warn">새로 시작하면 저장된 게임은 사라져요.</p>' : ''}
-    <div class="btnrow"><button class="btn alt" data-action="dex">신화신화도감 ${sum ? `${sum.caught}/${sum.total}` : ''}</button>
+    <div class="btnrow"><button class="btn alt" data-action="dex">신화도감 ${sum ? `${sum.caught}/${sum.total}` : ''}</button>
     <button class="btn alt" data-action="rules">룰 설명</button>
     <button class="btn alt" data-action="options">⚙ 설정</button></div>
     <div class="btnrow"><button class="btn alt" data-action="achv">🏆 업적</button>
     <button class="btn alt" data-action="records">📊 기록</button>
     <button class="btn alt" data-action="challenge">🎯 챌린지</button></div>
     <div class="btnrow"><button class="btn primary" data-action="tutorial">튜토리얼 (처음 하세요?)</button></div>
-    <div class="btnrow"><button class="btn primary" data-action="net">📡 대전 (2~4인 멀티플레이)</button></div>
+    <div class="btnrow"><button class="btn ghost" data-action="mode-back">← 모드 선택으로</button></div>
   </div></div>`;
 }
 
@@ -408,6 +421,7 @@ export function rulesHTML() {
   return `<div class="overlay"><div class="panel rulespanel">
     <div class="title big">룰 설명</div>
     <div class="rules">
+      <p class="homage">보드게임 <b>스플렌더</b>에서 영감을 받은 게임이에요.<br>가호 수집 → 카드 영입 → 18점 경쟁!</p>
       <h4>■ 목표</h4>
       <p><b>18점</b>을 먼저 모으면 마지막 라운드! 전원이 같은 턴 수를 마치면 종료, 최고점이 승리해요.</p>
       <h4>■ 내 차례에 하는 일 (하나만 선택)</h4>
@@ -415,11 +429,11 @@ export function rulesHTML() {
       ② <b>같은 가호 2개</b> 가져오기 (공급처에 4개 이상 남았을 때만)<br>
       ③ <b>카드 찜하기</b> (최대 3장, 암브로시아 1개를 받아요 · 희귀/전설은 찜 불가)<br>
       ④ <b>영입</b> (가호를 내고 카드를 가져와요)<br>
-      <span style="color:#4ade80">■</span> <b>초록 테두리</b>=지금 바로 잡을 수 있음 · <span style="color:#60a5fa">■</span> <b>파랑 테두리</b>=고른 가호를 가져가면 다음 턴에 영입할 수 있음</p>
-      <h4>■ 보너스 = 할인</h4>
+      <span style="color:#4ade80">■</span> <b>초록 테두리</b>=지금 바로 영입할 수 있음 · <span style="color:#60a5fa">■</span> <b>파랑 테두리</b>=고른 가호를 가져가면 다음 턴에 영입할 수 있음</p>
+      <h4>■ 가호 = 할인</h4>
       <p>영입한 존재의 가호 1개(희귀/전설은 2개)마다 해당 가호 1개씩 영구 할인! 게임 끝까지 유지돼요.</p>
       <h4>■ 신격화</h4>
-      <p>내 턴이 끝나면, 필요한 보너스를 가진 존재은 다음 단계로 <b>신격화</b>할 수 있어요. 점수와 보너스가 올라가요. (1→2→3단계만 가능)</p>
+      <p>내 턴이 끝나면, 필요한 가호를 가진 존재는 다음 단계로 <b>신격화</b>할 수 있어요. 점수와 가호가 올라가요. (1→2→3단계만 가능)</p>
       <h4>■ 가호 10개 제한</h4>
       <p>암브로시아 포함 10개를 넘기면, 초과분을 골라 반환해야 해요.</p>
       <h4>■ 암브로시아</h4>
@@ -436,8 +450,8 @@ export function tutorialHTML(tut) {
   const steps = [
     `<b>STEP 1</b> 가호를 모아보세요!<br>서로 다른 가호 3개를 누른 뒤 <b>[가져가기]</b>를 누르세요.`,
     `<b>STEP 2</b> 존재를 영입해보세요!<br>카드를 누르면 필요한 가호를 확인할 수 있어요. 가호가 모자라면 몇 턴 더 모아보세요.`,
-    `<b>STEP 3</b> 보너스 획득!<br>영입한 존재의 가호는 게임 끝까지 1개씩 영구 할인돼요.`,
-    `<b>STEP 4</b> 18점을 먼저 모으면 승리!<br>카드를 미리 <b>[찜하기]</b>로 확보하거나, 보너스를 모아 <b>신격화</b>시켜보세요. 행운을 빌어요!`,
+    `<b>STEP 3</b> 가호 획득!<br>영입한 존재의 가호는 게임 끝까지 1개씩 영구 할인돼요.`,
+    `<b>STEP 4</b> 18점을 먼저 모으면 승리!<br>카드를 미리 <b>[찜하기]</b>로 확보하거나, 가호를 모아 <b>신격화</b>시켜보세요. 행운을 빌어요!`,
   ];
   const last = tut.step >= steps.length - 1;
   const mid = tut.step === 2;
@@ -502,7 +516,7 @@ export function dexHTML(dex, cards) {
   };
   const g = dex.games;
   return `<div class="overlay"><div class="panel dexpanel">
-    <div class="title big">신화신화도감<small>영입한 존재 ${sum.caught}/${sum.total} · ${g.played}판 ${g.won}승</small></div>
+    <div class="title big">신화도감<small>영입한 존재 ${sum.caught}/${sum.total} · ${g.played}판 ${g.won}승</small></div>
     <div class="dexgrid">${list.map(cell).join('')}</div>
     <div class="btnrow"><button class="btn primary" data-action="dex-close">닫기</button></div>
   </div></div>`;
@@ -512,7 +526,7 @@ export function endHTML(ctrl) {
   const s = ctrl.state;
   const rows = s.ranking.map((r) => {
     const p = s.players[r.player];
-    return `<tr class="${r.rank === 1 ? 'win' : ''} ${p.id === ctrl.human ? 'me' : ''}"><td>${r.rank}</td><td>${p.isAI ? 'AI ' : ''}${p.name}</td><td>${r.points}점</td><td>신격화 ${r.evolutions}</td><td>${r.pokemon}마리</td></tr>`;
+    return `<tr class="${r.rank === 1 ? 'win' : ''} ${p.id === ctrl.human ? 'me' : ''}"><td>${r.rank}</td><td>${p.isAI ? 'AI ' : ''}${p.name}</td><td>${r.points}점</td><td>신격화 ${r.evolutions}</td><td>${r.pokemon}장</td></tr>`;
   }).join('');
   const top = s.ranking[0].player === ctrl.human;
   const scoreLine = ctrl.lastScore != null

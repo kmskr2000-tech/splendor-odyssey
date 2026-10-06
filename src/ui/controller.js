@@ -5,8 +5,8 @@
 import {
   COLORS, MASTER, PHASES, MAX_HAND,
   createGame, applyAction, legalActions, computePayment, evolveOptions, getCurrentPlayer, tokenCount,
-} from '../core/index.js?v=1791276374';
-import { chooseAction } from '../ai/heuristic.js?v=1791276374';
+} from '../core/index.js?v=1791279718';
+import { chooseAction } from '../ai/heuristic.js?v=1791279718';
 
 export const BALLS = {
   monster: { file: 'ball-thunder', ext: 'webp', name: '천둥의 가호', short: '천둥' },
@@ -293,11 +293,11 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
 
 export function evoText(card, cardsById) {
   if (!card.evolvesTo) {
-    if (card.tier === 'rare' || card.tier === 'legend') return '보너스 2개 · 암브로시아 필수';
+    if (card.tier === 'rare' || card.tier === 'legend') return '가호 2개 · 암브로시아 필수';
     return card.tier === 3 ? '최종 신격화' : '신격화 없음';
   }
   const next = cardsById.get(card.evolvesTo);
-  const req = COLORS.filter((c) => card.evolveReq?.[c]).map((c) => `${BALLS[c].short} 보너스 ${card.evolveReq[c]}`).join(' ');
+  const req = COLORS.filter((c) => card.evolveReq?.[c]).map((c) => `${BALLS[c].short} 가호 ${card.evolveReq[c]}`).join(' ');
   return `→ ${next?.name ?? '?'}<br>(${req})`;
 }
 
