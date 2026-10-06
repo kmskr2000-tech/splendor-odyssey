@@ -461,3 +461,40 @@ button.orsv:hover { border-color: #4ade80; }
   font-size: 13px; cursor: pointer;
 }
 #inapp-x { background: transparent !important; color: #fff !important; border: none !important; font-size: 16px !important; }
+
+/* ---------- intro splash ---------- */
+.intro {
+  position: fixed; inset: 0; z-index: 50; cursor: pointer;
+  background: radial-gradient(ellipse at 50% 35%, #1e2a6e 0%, #0b1853 55%, #060b26 100%);
+  display: flex; align-items: center; justify-content: center;
+  animation: introfade .8s ease-out;
+}
+.intro-inner { text-align: center; padding: 24px; }
+.intro-logo {
+  width: 190px; height: 190px; object-fit: contain;
+  animation: intrologoin 1.4s ease-out;
+  filter: drop-shadow(0 0 24px rgba(251, 191, 36, .35));
+}
+.intro-title {
+  margin-top: 18px; font-size: 34px; font-weight: bold; color: #fbbf24;
+  text-shadow: 3px 3px 0 #1a1a2e, 0 0 28px rgba(251, 191, 36, .4);
+  letter-spacing: 1px; animation: introfade 1s ease-out .3s both;
+}
+.intro-sub {
+  margin-top: 10px; font-size: 14px; color: #c7d2fe;
+  animation: introfade 1s ease-out .6s both;
+}
+.intro-tap {
+  margin-top: 34px; font-size: 15px; color: #fff; letter-spacing: 3px;
+  animation: introblink 1.4s ease-in-out .9s infinite;
+}
+@keyframes introfade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes intrologoin {
+  from { opacity: 0; transform: scale(.82); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes introblink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) {
+  .intro, .intro-logo, .intro-title, .intro-sub { animation-duration: .01s; }
+  .intro-tap { animation: none; }
+}

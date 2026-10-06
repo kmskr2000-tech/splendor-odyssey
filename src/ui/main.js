@@ -13,14 +13,14 @@ try {
   }
 } catch (e) { /* 버전 확인 실패 시 조용히 진행 */ }
 
-import { CARDS } from '../data/cards.js?v=1791274956';
-import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791274956';
-import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791274956';
-import { createController } from './controller.js?v=1791274956';
-import * as V from './view.js?v=1791274956';
-import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791274956';
-import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal } from '../storage/store.js?v=1791274956';
-import { NetSession } from '../net/session.js?v=1791274956';
+import { CARDS } from '../data/cards.js?v=1791276374';
+import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791276374';
+import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791276374';
+import { createController } from './controller.js?v=1791276374';
+import * as V from './view.js?v=1791276374';
+import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791276374';
+import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal } from '../storage/store.js?v=1791276374';
+import { NetSession } from '../net/session.js?v=1791276374';
 
 // In-app browser guard: KakaoTalk/etc. popups die when swiped away, killing
 // multiplayer. iOS can't force-open Safari from JS, so detect and guide.
@@ -78,6 +78,7 @@ let optionsOpen = false;
 let net = null; // NetSession while in multiplayer menu/lobby/game
 let netNotice = ''; // one-shot notice shown on the start/net screen
 let netHelpOpen = false;
+let introDone = false; // intro splash shown once per page load
 const storage = browserStorage();
 const options = loadOptions(storage);
 
@@ -93,7 +94,9 @@ function render() {
   checkChallenge();
   if (ctrl) for (const [id, fn] of Object.values(regions)) setHTML(id, fn(ctrl));
   let overlay;
-  if (netHelpOpen && net) {
+  if (!introDone) {
+    overlay = V.introHTML();
+  } else if (netHelpOpen && net) {
     overlay = V.netHelpHTML();
   } else if (net && !ctrl) {
     overlay = V.netHTML(net, netNotice);
@@ -347,6 +350,7 @@ document.addEventListener('click', (e) => {
   if (!el || el.disabled) return;
   const d = el.dataset;
   switch (d.action) {
+    case 'intro-tap': introDone = true; break;
     case 'start': startGame(d.name); return;
     case 'resume': resumeGame(); return;
     case 'dex': dexOpen = true; break;

@@ -5,8 +5,8 @@
 import {
   COLORS, MASTER, PHASES, MAX_HAND,
   createGame, applyAction, legalActions, computePayment, evolveOptions, getCurrentPlayer, tokenCount,
-} from '../core/index.js?v=1791274956';
-import { chooseAction } from '../ai/heuristic.js?v=1791274956';
+} from '../core/index.js?v=1791276374';
+import { chooseAction } from '../ai/heuristic.js?v=1791276374';
 
 export const BALLS = {
   monster: { file: 'ball-thunder', ext: 'webp', name: '천둥의 가호', short: '천둥' },

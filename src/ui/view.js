@@ -1,12 +1,12 @@
 // Pure HTML-string renderers. Each takes the controller and returns markup; main.js owns the DOM.
 // All text interpolated here comes from our own card data / constants (no user input).
 
-import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791274956';
-import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791274956';
-import { BALLS, TRAINERS, evoText } from './controller.js?v=1791274956';
-import { dexSummary } from '../storage/store.js?v=1791274956';
-import { ACHIEVEMENTS } from '../data/achievements.js?v=1791274956';
-import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791274956';
+import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791276374';
+import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791276374';
+import { BALLS, TRAINERS, evoText } from './controller.js?v=1791276374';
+import { dexSummary } from '../storage/store.js?v=1791276374';
+import { ACHIEVEMENTS } from '../data/achievements.js?v=1791276374';
+import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791276374';
 
 const diffLabel = { easy: '쉬움', normal: '보통', hard: '어려움' };
 
@@ -89,7 +89,7 @@ export function headerHTML(ctrl) {
   const last = ctrl.lastRound ? `<div class="lastround">마지막 라운드! ${s.players[s.endTriggeredBy].name}이(가) 18점 달성</div>` : '';
   const netbadge = ctrl.mp ? `<div class="netbadge">📡 대전 ${ctrl.mp.names.length}인</div>` : '';
   return `<div class="header">
-      <div class="title">스플렌더: 오디세이아<small>SPLENDOR: ODYSSEY · DOT EDITION</small></div>
+      <div class="title">Odyssey: The Card<small>오디세이아 · DOT EDITION</small></div>
       <button class="rulesbtn" data-action="rules">룰 설명</button>
       <button class="rulesbtn opt" data-action="options" aria-label="설정">⚙</button>
       ${netbadge}
@@ -361,6 +361,19 @@ export function sheetHTML(ctrl) {
     </div></div>`;
 }
 
+// ---------- intro splash (shown once per page load, before the title screen) ----------
+
+export function introHTML() {
+  return `<div class="intro" data-action="intro-tap">
+    <div class="intro-inner">
+      <img class="intro-logo" src="assets/title-logo.webp" alt="Odyssey: The Card">
+      <div class="intro-title">Odyssey: The Card</div>
+      <div class="intro-sub">신화의 가호를 모아 전설을 완성하라</div>
+      <div class="intro-tap">— TAP TO START —</div>
+    </div>
+  </div>`;
+}
+
 export function startHTML({ save = null, dex = null, cards = [], options = null, notice = '' } = {}) {
   const sum = dex ? dexSummary(dex, cards) : null;
   const diff = options?.difficulty ?? 'normal';
@@ -368,7 +381,7 @@ export function startHTML({ save = null, dex = null, cards = [], options = null,
     ? `<button class="btn primary resume" data-action="resume">이어하기<small>${save.humanName} · ${save.game.turn}턴째 · ${new Date(save.savedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</small></button>`
     : '';
   return `<div class="overlay"><div class="panel">
-    <div class="titlebanner"><img src="assets/title-logo.webp" alt="스플렌더: 오디세이아"><div class="titletxt">스플렌더: 오디세이아<small>SPLENDOR: ODYSSEY · DOT EDITION</small></div></div>
+    <div class="titlebanner"><img src="assets/title-logo.webp" alt="Odyssey: The Card"><div class="titletxt">Odyssey: The Card<small>오디세이아 · DOT EDITION</small></div></div>
     <p class="sheet-p">영웅을 골라 AI 3명과 4인전을 시작해요.<br>신화를 먼저 완성(18점)하는 영웅이 승리!</p>
     ${notice ? `<p class="sheet-p warn">${esc(notice)}</p>` : ''}
     ${resume}
