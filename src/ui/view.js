@@ -1,12 +1,12 @@
 // Pure HTML-string renderers. Each takes the controller and returns markup; main.js owns the DOM.
 // All text interpolated here comes from our own card data / constants (no user input).
 
-import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791267404';
-import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791267404';
-import { BALLS, TRAINERS, evoText } from './controller.js?v=1791267404';
-import { dexSummary } from '../storage/store.js?v=1791267404';
-import { ACHIEVEMENTS } from '../data/achievements.js?v=1791267404';
-import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791267404';
+import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791268452';
+import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791268452';
+import { BALLS, TRAINERS, evoText } from './controller.js?v=1791268452';
+import { dexSummary } from '../storage/store.js?v=1791268452';
+import { ACHIEVEMENTS } from '../data/achievements.js?v=1791268452';
+import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791268452';
 
 const diffLabel = { easy: '쉬움', normal: '보통', hard: '어려움' };
 
@@ -17,7 +17,7 @@ const mythSrc = (id) => `${ASSET}/myth/${id}.webp`;
 const ballImg = (key, cls = 'miniball') => `<img class="${cls}" src="${ballSrc(key)}" alt="${BALLS[key].name}">`;
 const staticSprite = (card, cls = 'tiny') => `<img class="${cls}" src="${mythSrc(card.id)}" alt="">`;
 const animSprite = (card) =>
-  `<img class="sprite" src="${mythSrc(card.id)}" alt="${card.name}">`;
+  `<img class="sprite" src="${ASSET}/anim/${card.id}.gif" onerror="this.onerror=null;this.src='${mythSrc(card.id)}'" alt="${card.name}">`;
 
 const tierLabel = { 1: '1단계', 2: '2단계', 3: '3단계', rare: '희귀', legend: '전설' };
 
