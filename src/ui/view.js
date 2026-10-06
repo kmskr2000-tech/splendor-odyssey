@@ -1,12 +1,12 @@
 // Pure HTML-string renderers. Each takes the controller and returns markup; main.js owns the DOM.
 // All text interpolated here comes from our own card data / constants (no user input).
 
-import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791269551';
-import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791269551';
-import { BALLS, TRAINERS, evoText } from './controller.js?v=1791269551';
-import { dexSummary } from '../storage/store.js?v=1791269551';
-import { ACHIEVEMENTS } from '../data/achievements.js?v=1791269551';
-import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791269551';
+import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791269756';
+import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791269756';
+import { BALLS, TRAINERS, evoText } from './controller.js?v=1791269756';
+import { dexSummary } from '../storage/store.js?v=1791269756';
+import { ACHIEVEMENTS } from '../data/achievements.js?v=1791269756';
+import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791269756';
 
 const diffLabel = { easy: '쉬움', normal: '보통', hard: '어려움' };
 
@@ -349,7 +349,7 @@ export function sheetHTML(ctrl) {
 
 export function startHTML({ save = null, dex = null, cards = [], options = null } = {}) {
   const sum = dex ? dexSummary(dex, cards) : null;
-  const diff = save?.difficulty ?? options?.difficulty ?? 'normal';
+  const diff = options?.difficulty ?? 'normal';
   const resume = save
     ? `<button class="btn primary resume" data-action="resume">이어하기<small>${save.humanName} · ${save.game.turn}턴째 · ${new Date(save.savedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</small></button>`
     : '';

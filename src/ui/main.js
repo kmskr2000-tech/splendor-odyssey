@@ -13,13 +13,13 @@ try {
   }
 } catch (e) { /* 버전 확인 실패 시 조용히 진행 */ }
 
-import { CARDS } from '../data/cards.js?v=1791269551';
-import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791269551';
-import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791269551';
-import { createController } from './controller.js?v=1791269551';
-import * as V from './view.js?v=1791269551';
-import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791269551';
-import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal } from '../storage/store.js?v=1791269551';
+import { CARDS } from '../data/cards.js?v=1791269756';
+import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791269756';
+import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791269756';
+import { createController } from './controller.js?v=1791269756';
+import * as V from './view.js?v=1791269756';
+import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791269756';
+import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal } from '../storage/store.js?v=1791269756';
 
 const params = new URLSearchParams(location.search);
 const AI_DELAY = params.has('fast') ? 0 : 1600; // ?fast=1 skips the pacing delay (tests)
