@@ -354,8 +354,8 @@ export function startHTML({ save = null, dex = null, cards = [], options = null 
     ? `<button class="btn primary resume" data-action="resume">이어하기<small>${save.humanName} · ${save.game.turn}턴째 · ${new Date(save.savedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</small></button>`
     : '';
   return `<div class="overlay"><div class="panel">
-    <div class="title big">스플렌더: 오디세이아<small>SPLENDOR: ODYSSEY · DOT EDITION</small></div>
-    <p class="sheet-p">트레이너를 골라 AI 3명과 4인전을 시작해요.<br>18점을 먼저 모으는 트레이너가 승리!</p>
+    <div class="titlebanner"><img src="assets/title-logo.webp" alt="스플렌더: 오디세이아"><div class="titletxt">스플렌더: 오디세이아<small>SPLENDOR: ODYSSEY · DOT EDITION</small></div></div>
+    <p class="sheet-p">영웅을 골라 AI 3명과 4인전을 시작해요.<br>신화를 먼저 완성(18점)하는 영웅이 승리!</p>
     ${resume}
     <div class="tiles">${TRAINERS.map((t, i) => `<button class="tile t${i}" data-action="start" data-name="${t}"><span class="tilebox"></span>${t}</button>`).join('')}</div>
     <div class="difflabel">AI 난이도</div>

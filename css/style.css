@@ -389,3 +389,8 @@ button.mp { cursor: pointer; }
 }
 .chalrow small { color: #a8a8c0; }
 .chalicon { font-size: 20px; }
+
+.titlebanner { position: relative; margin: -4px -4px 8px; }
+.titlebanner img { width: 100%; display: block; border: 3px solid var(--ink); image-rendering: auto; }
+.titletxt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 26px; font-weight: 900; color: #ffd166; text-shadow: 2px 2px 0 #3b2f0b, -1px -1px 0 #3b2f0b, 1px -1px 0 #3b2f0b, -1px 1px 0 #3b2f0b, 0 0 12px rgba(255,209,102,.6); letter-spacing: 1px; }
+.titletxt small { font-size: 10px; color: #e8e0c8; font-weight: 400; letter-spacing: 2px; margin-top: 4px; text-shadow: 1px 1px 0 #000; }
