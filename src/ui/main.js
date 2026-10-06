@@ -13,17 +13,17 @@ try {
   }
 } catch (e) { /* 버전 확인 실패 시 조용히 진행 */ }
 
-import { CARDS } from '../data/cards.js?v=1791288149';
-import { ALL_OPPONENTS } from '../data/heroes.js?v=1791288149';
-import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791288149';
-import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791288149';
-import { JOURNEY_HEROES, journeyStagesOf, journeyStageOf, JOURNEY_ENDING } from '../data/journey.js?v=1791288149';
-import { createController } from './controller.js?v=1791288149';
-import * as V from './view.js?v=1791288149';
-import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791288149';
-import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal, loadHero, getHero, loadJourney, startJourneySlot, advanceJourneyStage, clearJourneySlot, wipeAll, dexSummary } from '../storage/store.js?v=1791288149';
-import { settleMeta } from '../meta/settle.js?v=1791288149';
-import { NetSession } from '../net/session.js?v=1791288149';
+import { CARDS } from '../data/cards.js?v=1791288668';
+import { ALL_OPPONENTS } from '../data/heroes.js?v=1791288668';
+import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791288668';
+import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791288668';
+import { JOURNEY_HEROES, journeyStagesOf, journeyStageOf, JOURNEY_ENDING } from '../data/journey.js?v=1791288668';
+import { createController } from './controller.js?v=1791288668';
+import * as V from './view.js?v=1791288668';
+import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791288668';
+import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal, loadHero, getHero, loadJourney, startJourneySlot, advanceJourneyStage, clearJourneySlot, wipeAll, dexSummary } from '../storage/store.js?v=1791288668';
+import { settleMeta } from '../meta/settle.js?v=1791288668';
+import { NetSession } from '../net/session.js?v=1791288668';
 
 // In-app browser guard: KakaoTalk/etc. popups die when swiped away, killing
 // multiplayer. iOS can't force-open Safari from JS, so detect and guide.
@@ -92,6 +92,7 @@ let singleMode = 'normal'; // 'journey' | 'normal' — 싱글 세부 모드
 let journeySlot = null; // 선택된 슬롯 인덱스 (0-2)
 let journeyStageIntro = null; // 스테이지 인트로 표시 중인 스테이지 번호
 let journeyEnding = false; // 엔딩 화면 표시
+let journeyNewDiff = 'normal'; // 새 여정 시작 시 선택한 난이도 (여정 내내 고정)
 const storage = browserStorage();
 const options = loadOptions(storage);
 
@@ -430,7 +431,7 @@ function startJourneyStage(slotIdx, stageN) {
   const seedParam = params.get('seed');
   const seed = seedParam !== null ? Number(seedParam) : (crypto.getRandomValues(new Uint32Array(1))[0] || 1);
   const aiNames = stage.opponents.slice();
-  const userDiff = options.difficulty;
+  const userDiff = slot.difficulty || 'normal';
   const scenario = {
     aiDifficulty: V.effectiveJourneyDifficulty(stage.aiDifficulty, userDiff),
     boss: stage.boss ? stage.boss.name : null,
@@ -466,13 +467,13 @@ function singleStartHTML() {
     }
     // 슬롯이 선택되고 비어있으면 영웅 선택
     if (journeySlot !== null && !j.slots[journeySlot] && journeyStageIntro === null) {
-      return V.journeyHeroesHTML(JOURNEY_HEROES);
+      return V.journeyHeroesHTML(JOURNEY_HEROES, journeyNewDiff);
     }
     // 스테이지 인트로
     if (journeyStageIntro !== null && journeySlot !== null) {
       const slot = j.slots[journeySlot];
       const stage = journeyStageOf(slot.hero, journeyStageIntro);
-      return V.journeyStageHTML(slot.hero, stage, options.difficulty);
+      return V.journeyStageHTML(slot.hero, stage, slot.difficulty || 'normal');
     }
     // 슬롯 선택
     return V.journeySlotsHTML(j.slots);
@@ -587,10 +588,16 @@ document.addEventListener('click', (e) => {
       // 빈 슬롯에 영웅 지정 (오디세우스만 가능)
       const hero = JOURNEY_HEROES.find((h) => h.name === d.v);
       if (!hero || !hero.available) break;
-      startJourneySlot(storage, journeySlot, hero.name);
+      startJourneySlot(storage, journeySlot, hero.name, journeyNewDiff);
+      journeyNewDiff = 'normal'; // 리셋
       journeyStageIntro = 1;
       break;
     }
+    case 'journey-difficulty':
+      if (['easy', 'normal', 'hard', 'veryhard'].includes(d.v)) {
+        journeyNewDiff = d.v;
+      }
+      break;
     case 'journey-slot-delete': {
       clearJourneySlot(storage, Number(d.v));
       if (journeySlot === Number(d.v)) journeySlot = null;

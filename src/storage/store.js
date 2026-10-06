@@ -303,10 +303,10 @@ function writeJourney(storage, j) {
 }
 
 // 슬롯에 새 여정 시작 (hero 고정)
-export function startJourneySlot(storage, slotIdx, hero) {
+export function startJourneySlot(storage, slotIdx, hero, difficulty = 'normal') {
   const j = loadJourney(storage);
   if (slotIdx < 0 || slotIdx >= JOURNEY_SLOTS) return j;
-  j.slots[slotIdx] = { hero, stage: 0, cleared: [] };
+  j.slots[slotIdx] = { hero, stage: 0, cleared: [], difficulty };
   writeJourney(storage, j);
   return j;
 }

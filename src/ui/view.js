@@ -1,14 +1,14 @@
 // Pure HTML-string renderers. Each takes the controller and returns markup; main.js owns the DOM.
 // All text interpolated here comes from our own card data / constants (no user input).
 
-import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791288149';
-import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791288149';
-import { BALLS, TRAINERS, evoText } from './controller.js?v=1791288149';
-import { dexSummary } from '../storage/store.js?v=1791288149';
-import { abilityInfo, isBoss } from '../data/heroes.js?v=1791288149';
+import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791288668';
+import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791288668';
+import { BALLS, TRAINERS, evoText } from './controller.js?v=1791288668';
+import { dexSummary } from '../storage/store.js?v=1791288668';
+import { abilityInfo, isBoss } from '../data/heroes.js?v=1791288668';
 
-import { ACHIEVEMENTS, ACHV_CATS } from '../data/achievements.js?v=1791288149';
-import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791288149';
+import { ACHIEVEMENTS, ACHV_CATS } from '../data/achievements.js?v=1791288668';
+import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791288668';
 
 const diffLabel = { easy: '쉬움', normal: '보통', hard: '어려움' };
 
@@ -113,9 +113,11 @@ export function headerHTML(ctrl) {
   const netbadge = ctrl.mp ? `<div class="netbadge">📡 대전 ${ctrl.mp.names.length}인</div>` : '';
   return `<div class="header">
       <div class="title">Odyssey: The Card<small>오디세이아 · DOT EDITION</small></div>
-      <button class="homebtn" data-action="quit-confirm">🏠 타이틀로</button>
-      <button class="rulesbtn" data-action="rules">룰 설명</button>
-      <button class="rulesbtn opt" data-action="options" aria-label="설정">⚙</button>
+      <div class="hbtns">
+        <button class="homebtn" data-action="quit-confirm">🏠 타이틀로</button>
+        <button class="rulesbtn" data-action="rules">룰 설명</button>
+        <button class="rulesbtn opt" data-action="options" aria-label="설정">⚙</button>
+      </div>
       ${netbadge}
       <div class="turn ${ctrl.isHumanTurn ? 'mine' : ''}">${badge}</div>
     </div>${last}`;
@@ -479,13 +481,12 @@ export function howtoHTML() {
 
 // 게임 시작 전 난이도 선택 (일반전)
 export function diffSelectHTML(current) {
-  const multLabel = { easy: '×0.7', normal: '×1.0', hard: '×1.4', veryhard: '×2.0' };
   return `<div class="overlay"><div class="panel">
     <div class="title big">난이도 선택</div>
-    <p class="sheet-p">AI의 강도와 보상 배율이 바뀌어요.<br>선택은 저장되어 다음에도 유지됩니다.</p>
+    <p class="sheet-p">AI의 강도가 바뀌어요.<br>선택은 저장되어 다음에도 유지됩니다.</p>
     <div class="diffrow">
       ${[['easy', '쉬움'], ['normal', '보통'], ['hard', '어려움'], ['veryhard', '매우어려움']].map(([v, l]) =>
-        `<button class="diffbtn ${current === v ? 'sel' : ''}" data-action="difficulty" data-v="${v}">${l}<small>${multLabel[v]}</small></button>`).join('')}
+        `<button class="diffbtn ${current === v ? 'sel' : ''}" data-action="difficulty" data-v="${v}">${l}</button>`).join('')}
     </div>
     <div class="btnrow">
       <button class="btn" data-action="diff-back">← 모드 선택</button>
@@ -534,8 +535,8 @@ export function journeySlotsHTML(slots) {
   </div></div>`;
 }
 
-// 빈 슬롯 영웅 선택 (오디세우스만 가능)
-export function journeyHeroesHTML(heroes) {
+// 빈 슬롯 영웅 선택 (오디세우스만 가능) — 난이도도 여기서 정함 (여정 내내 고정)
+export function journeyHeroesHTML(heroes, currentDiff = 'normal') {
   const tiles = heroes.map((h) => h.available
     ? `<button class="tile" data-action="journey-hero" data-v="${h.name}">
         <img class="tileface" src="assets/heroes/${h.face}.webp" alt="">
@@ -549,6 +550,11 @@ export function journeyHeroesHTML(heroes) {
     <div class="title big">영웅 선택</div>
     <p class="sheet-p">이 슬롯의 영웅을 정하세요. (변경 불가)</p>
     <div class="tiles">${tiles}</div>
+    <div class="difflabel">난이도 <small>여정 내내 고정됩니다</small></div>
+    <div class="diffrow">
+      ${[['easy', '쉬움'], ['normal', '보통'], ['hard', '어려움'], ['veryhard', '매우어려움']].map(([v, l]) =>
+        `<button class="diffbtn ${currentDiff === v ? 'sel' : ''}" data-action="journey-difficulty" data-v="${v}">${l}</button>`).join('')}
+    </div>
     <div class="btnrow"><button class="btn" data-action="journey-back">← 슬롯 선택</button></div>
   </div></div>`;
 }
@@ -564,7 +570,6 @@ export function journeyStageHTML(heroName, stage, userDiff = 'normal') {
   }).join('');
   const effDiff = effectiveJourneyDifficulty(stage.aiDifficulty, userDiff);
   const diffLabel = { easy: '쉬움', normal: '보통', hard: '어려움', veryhard: '매우 어려움' };
-  const multLabel = { easy: '×0.7', normal: '×1.0', hard: '×1.4', veryhard: '×2.0' };
   return `<div class="overlay"><div class="panel">
     <div class="title big">스테이지 ${stage.n}<small>${esc(stage.name)}</small></div>
     <div class="storybox">${stage.story.map((l) => `<p>${esc(l)}</p>`).join('')}</div>
@@ -572,12 +577,7 @@ export function journeyStageHTML(heroName, stage, userDiff = 'normal') {
     <div class="oppchips">${oppList}</div>
     ${boss ? `<p class="sheet-p boss-warn">👹 <b>${esc(boss.name)}</b> (${esc(boss.title)}) — 1등 승리 시 다음 스테이지!</p>`
       : `<p class="sheet-p">1등 승리 시 다음 스테이지 해금!</p>`}
-    <div class="difflabel">난이도 선택 <small>스테이지 기본 강도(${diffLabel[stage.aiDifficulty] ?? ''})에 가감돼요</small></div>
-    <div class="diffrow">
-      ${[['easy', '쉬움'], ['normal', '보통'], ['hard', '어려움'], ['veryhard', '매우어려움']].map(([v, l]) =>
-        `<button class="diffbtn ${userDiff === v ? 'sel' : ''}" data-action="difficulty" data-v="${v}">${l}<small>${multLabel[v]}</small></button>`).join('')}
-    </div>
-    <p class="sheet-p"><small>실효 AI 강도: <b>${diffLabel[effDiff]}</b></small></p>
+    <p class="sheet-p"><small>AI 강도: <b>${diffLabel[effDiff]}</b></small></p>
     <div class="btnrow">
       <button class="btn" data-action="journey-back">← 슬롯 선택</button>
       <button class="btn primary" data-action="journey-stage-start">⚔️ 도전!</button>
@@ -622,11 +622,10 @@ export function startHTML({ save = null, dex = null, cards = [], options = null,
       + `${h ? `<span class="lvbadge">Lv.${h.level} · ${h.title}</span><span class="xpbar"><span style="width:${h.need ? Math.min(100, Math.round(h.cur / h.need * 100)) : 100}%"></span></span>` : ''}`
       + `${ab ? `<small class="abdesc">✨ ${ab.name}: ${ab.desc}</small>` : ''}</button>`;
   }).join('');
-  const multLabel = { easy: '×0.7', normal: '×1.0', hard: '×1.4', veryhard: '×2.0' };
-  const diffPreview = `<div class="difflabel">AI 난이도<small>보상 ×0.7 / ×1.0 / ×1.4 / ×2.0</small></div>
+  const diffPreview = `<div class="difflabel">AI 난이도</div>
     <div class="diffrow">
       ${[['easy', '쉬움'], ['normal', '보통'], ['hard', '어려움'], ['veryhard', '매우어려움']].map(([v, l]) =>
-        `<button class="diffbtn ${diff === v ? 'sel' : ''}" data-action="difficulty" data-v="${v}">${l}<small>${multLabel[v]}</small></button>`).join('')}
+        `<button class="diffbtn ${diff === v ? 'sel' : ''}" data-action="difficulty" data-v="${v}">${l}</button>`).join('')}
     </div>`;
   return `<div class="overlay"><div class="panel">
     <div class="titlebanner"><img src="assets/title-logo.webp" alt="Odyssey: The Card"><div class="titletxt">Odyssey: The Card<small>오디세이아 · DOT EDITION</small></div></div>

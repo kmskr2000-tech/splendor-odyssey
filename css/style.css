@@ -34,8 +34,9 @@ img { image-rendering: pixelated; }
 /* ---------- header ---------- */
 .header {
   background: #7c3aed; border-bottom: 4px solid var(--ink);
-  padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
 }
+.hbtns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .title { font-size: 18px; color: #fff; text-shadow: 2px 2px 0 #2e1065; }
 .title small { display: block; font-size: 9px; color: #ddd6fe; text-shadow: none; margin-top: 4px; }
 .title.big { font-size: 24px; text-align: center; margin-bottom: 12px; }

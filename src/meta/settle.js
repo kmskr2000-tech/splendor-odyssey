@@ -6,7 +6,7 @@
 //   bossBeaten(격파한 보스 이름 | null)
 // }
 
-import { addHeroXP, heroXpFor } from '../storage/store.js?v=1791288149';
+import { addHeroXP, heroXpFor } from '../storage/store.js?v=1791288668';
 
 export function settleMeta(storage, ctx) {
   const out = { xp: null };
