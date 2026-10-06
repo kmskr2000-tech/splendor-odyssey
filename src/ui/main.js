@@ -13,19 +13,19 @@ try {
   }
 } catch (e) { /* 버전 확인 실패 시 조용히 진행 */ }
 
-import { CARDS } from '../data/cards.js?v=1791285379';
-import { ALL_OPPONENTS } from '../data/heroes.js?v=1791285379';
-import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791285379';
-import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791285379';
-import { JOURNEY_HEROES, journeyStagesOf, journeyStageOf, JOURNEY_ENDING } from '../data/journey.js?v=1791285379';
-import { createController } from './controller.js?v=1791285379';
-import * as V from './view.js?v=1791285379';
-import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791285379';
-import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal, loadHero, getHero, loadJourney, startJourneySlot, advanceJourneyStage, clearJourneySlot } from '../storage/store.js?v=1791285379';
-import { todayStr } from '../data/dates.js?v=1791285379';
-import { dailyChallenge, weeklyChallenge } from '../data/daily.js?v=1791285379';
-import { settleMeta } from '../meta/settle.js?v=1791285379';
-import { NetSession } from '../net/session.js?v=1791285379';
+import { CARDS } from '../data/cards.js?v=1791287115';
+import { ALL_OPPONENTS } from '../data/heroes.js?v=1791287115';
+import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791287115';
+import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791287115';
+import { JOURNEY_HEROES, journeyStagesOf, journeyStageOf, JOURNEY_ENDING } from '../data/journey.js?v=1791287115';
+import { createController } from './controller.js?v=1791287115';
+import * as V from './view.js?v=1791287115';
+import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791287115';
+import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal, loadHero, getHero, loadJourney, startJourneySlot, advanceJourneyStage, clearJourneySlot } from '../storage/store.js?v=1791287115';
+import { todayStr } from '../data/dates.js?v=1791287115';
+import { dailyChallenge, weeklyChallenge } from '../data/daily.js?v=1791287115';
+import { settleMeta } from '../meta/settle.js?v=1791287115';
+import { NetSession } from '../net/session.js?v=1791287115';
 
 // In-app browser guard: KakaoTalk/etc. popups die when swiped away, killing
 // multiplayer. iOS can't force-open Safari from JS, so detect and guide.

@@ -1,20 +1,21 @@
 // Pure HTML-string renderers. Each takes the controller and returns markup; main.js owns the DOM.
 // All text interpolated here comes from our own card data / constants (no user input).
 
-import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791285379';
-import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791285379';
-import { BALLS, TRAINERS, evoText } from './controller.js?v=1791285379';
-import { dexSummary } from '../storage/store.js?v=1791285379';
-import { abilityInfo, isBoss } from '../data/heroes.js?v=1791285379';
+import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js';
+import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js';
+import { BALLS, TRAINERS, evoText } from './controller.js';
+import { dexSummary } from '../storage/store.js';
+import { abilityInfo, isBoss } from '../data/heroes.js';
 
-import { ACHIEVEMENTS } from '../data/achievements.js?v=1791285379';
-import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791285379';
+import { ACHIEVEMENTS } from '../data/achievements.js';
+import { CHALLENGES, challengeProgress } from '../data/challenges.js';
 
 const diffLabel = { easy: '쉬움', normal: '보통', hard: '어려움' };
 
 const ASSET = 'assets';
-export const ballSrc = (key) => `${ASSET}/items/${BALLS[key].file}.${BALLS[key].ext || 'png'}`;
-const mythSrc = (id) => `${ASSET}/myth/${id}.webp`;
+const AV = (typeof window !== 'undefined' && window.__V) ? `?v=${window.__V}` : '';
+export const ballSrc = (key) => `${ASSET}/items/${BALLS[key].file}.${BALLS[key].ext || 'png'}${AV}`;
+const mythSrc = (id) => `${ASSET}/myth/${id}.webp${AV}`;
 
 const ballImg = (key, cls = 'miniball') => `<img class="${cls}" src="${ballSrc(key)}" alt="${BALLS[key].name}">`;
 // 캐릭터 얼굴 (플레이어블 4영웅 + 승급전 보스 5명 + 구 영웅 3명은 리그 상대로 재사용)
@@ -36,7 +37,7 @@ const HERO_FACE = {
   '스킬라': 'boss-skylla',
   '포세이돈': 'boss-poseidon',
 };
-export const heroFaceSrc = (name) => HERO_FACE[name] ? `${ASSET}/heroes/${HERO_FACE[name]}.webp` : null;
+export const heroFaceSrc = (name) => HERO_FACE[name] ? `${ASSET}/heroes/${HERO_FACE[name]}.webp${AV}` : null;
 // 플레이어("나") 아바타: -1 = 랜덤(게임마다), 0~3 = 고정
 export const playerAvatarSrc = (idx) => `${ASSET}/heroes/player-${(idx % 4) + 1}.webp`;
 export const resolvePlayerAvatar = (options, seed = 0) => {

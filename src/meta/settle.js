@@ -10,8 +10,8 @@
 import {
   addHeroXP, heroXpFor,
   completeDaily, completeChal, loadChal,
-} from '../storage/store.js?v=1791285379';
-import { dailyChallenge, weeklyChallenge, isChallengeComplete } from '../data/daily.js?v=1791285379';
+} from '../storage/store.js?v=1791287115';
+import { dailyChallenge, weeklyChallenge, isChallengeComplete } from '../data/daily.js?v=1791287115';
 
 export function settleMeta(storage, ctx) {
   const out = { xp: null, daily: null, weekly: null };
