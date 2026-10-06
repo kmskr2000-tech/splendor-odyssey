@@ -6,7 +6,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
   --ink: #0a0a12; --bg: #1a1a2e; --panel: #24243c; --gold: #fbbf24; --muted: #8b8ba3;
-  --monster: #b4504a; --super: #4e6da3; --hyper: #55555e; --heal: #b0608a; --quick: #b3923c; --master: #7768ad;
+  --monster: #b4504a; --super: #4e6da3; --hyper: #8a6f4d; --heal: #b0608a; --quick: #b3923c; --master: #7768ad;
 }
 html { -webkit-text-size-adjust: 100%; }
 body {
