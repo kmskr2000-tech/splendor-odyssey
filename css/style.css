@@ -575,3 +575,20 @@ button.orsv:hover { border-color: #4ade80; }
 .oppchip img { width: 28px; height: 28px; border-radius: 50%; }
 .oppchip.boss { border-color: #ff5555; box-shadow: 0 0 8px #ff5555; }
 .boss-warn { color: #ff8888; }
+
+/* 게임 중 타이틀로 버튼 */
+.homebtn {
+  font-size: 12px; background: #f59e0b; color: #1a1a2e; white-space: nowrap; font-weight: bold;
+  border: 3px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); padding: 6px 10px;
+}
+.homebtn:active { transform: translate(3px, 3px); box-shadow: none; }
+
+/* 업적 카테고리 */
+.achvcat { margin-bottom: 10px; }
+.achvchead { font-size: 13px; font-weight: bold; color: var(--gold); margin: 8px 0 6px; }
+.achvchead small { color: #8a8aa0; font-weight: normal; }
+
+/* 설정: 데이터 초기화 */
+.wiperow { margin: 12px 0; padding: 10px; border: 2px dashed #ff5555; }
+.btn.danger { background: #dc2626; color: #fff; }
+.danger-text { color: #ff8888; }

@@ -1,14 +1,14 @@
 // Pure HTML-string renderers. Each takes the controller and returns markup; main.js owns the DOM.
 // All text interpolated here comes from our own card data / constants (no user input).
 
-import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js';
-import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js';
-import { BALLS, TRAINERS, evoText } from './controller.js';
-import { dexSummary } from '../storage/store.js';
-import { abilityInfo, isBoss } from '../data/heroes.js';
+import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791288149';
+import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791288149';
+import { BALLS, TRAINERS, evoText } from './controller.js?v=1791288149';
+import { dexSummary } from '../storage/store.js?v=1791288149';
+import { abilityInfo, isBoss } from '../data/heroes.js?v=1791288149';
 
-import { ACHIEVEMENTS } from '../data/achievements.js';
-import { CHALLENGES, challengeProgress } from '../data/challenges.js';
+import { ACHIEVEMENTS, ACHV_CATS } from '../data/achievements.js?v=1791288149';
+import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791288149';
 
 const diffLabel = { easy: '쉬움', normal: '보통', hard: '어려움' };
 
@@ -113,6 +113,7 @@ export function headerHTML(ctrl) {
   const netbadge = ctrl.mp ? `<div class="netbadge">📡 대전 ${ctrl.mp.names.length}인</div>` : '';
   return `<div class="header">
       <div class="title">Odyssey: The Card<small>오디세이아 · DOT EDITION</small></div>
+      <button class="homebtn" data-action="quit-confirm">🏠 타이틀로</button>
       <button class="rulesbtn" data-action="rules">룰 설명</button>
       <button class="rulesbtn opt" data-action="options" aria-label="설정">⚙</button>
       ${netbadge}
@@ -439,13 +440,7 @@ export function introHTML() {
   </div>`;
 }
 
-export function modeHTML({ daily = null, weekly = null, chalDone = {}, streak = 0 } = {}) {
-  const chalCard = (ch, label) => ch ? `
-    <div class="dailycard ${chalDone[ch.id] ? 'done' : ''}">
-      <span class="dico">${chalDone[ch.id] ? '✅' : (ch.kind === 'daily' ? '📅' : '🗓️')}</span>
-      <div><b>${label} · ${ch.name}</b><br><small>${ch.desc}</small>
-      ${ch.kind === 'daily' && streak > 0 ? `<br><small class="streak">🔥 ${streak}일 연속 클리어</small>` : ''}</div>
-    </div>` : '';
+export function modeHTML() {
   return `<div class="overlay"><div class="panel modepanel">
     <div class="titlebanner"><img src="assets/title-logo.webp" alt="Odyssey: The Card"><div class="titletxt">Odyssey: The Card<small>오디세이아 · DOT EDITION</small></div></div>
     <p class="sheet-p">가호를 모아 카드를 영입하는 턴제 전략 카드 게임이에요.<br>가호를 모아 카드를 영입하고, 신화를 먼저 완성(18점)하세요!</p>
@@ -454,7 +449,60 @@ export function modeHTML({ daily = null, weekly = null, chalDone = {}, streak = 
       <button class="btn alt modebtn" data-action="mode-single">⚔️ 일반전<small>🎲 랜덤 영웅으로 바로 시작</small></button>
       <button class="btn alt modebtn" data-action="mode-net">🌐 대전 모드<small>친구와 2~4인 멀티플레이</small></button>
     </div>
-    <div class="dailies">${chalCard(daily, '오늘의 도전')}${chalCard(weekly, '이번 주 도전')}</div>
+    <div class="btnrow"><button class="btn alt" data-action="howto">📖 게임 방법</button></div>
+  </div></div>`;
+}
+
+// 게임 방법 (메인화면 튜토리얼)
+export function howtoHTML() {
+  return `<div class="overlay"><div class="panel rulespanel">
+    <div class="title big">📖 게임 방법</div>
+    <div class="rules">
+      <h4>■ 기본 룰</h4>
+      <p>90장의 카드, 6종의 가호. <b>18점</b>을 먼저 모은 영웅이 승리해요!</p>
+      <h4>■ 내 턴에 하는 일 (하나만 선택)</h4>
+      <p>① <b>가호 가져오기</b>: 서로 다른 가호 3개, 또는 같은 가호 2개<br>
+      ② <b>카드 영입</b>: 가호를 내고 진열된 카드를 가져와요<br>
+      ③ <b>찜하기</b>: 카드를 미리 확보하고 암브로시아 1개를 받아요</p>
+      <h4>■ 가호 = 할인</h4>
+      <p>영입한 카드의 가호마다 해당 가호가 1개씩 영구 할인돼요!</p>
+      <h4>■ 신격화</h4>
+      <p>같은 카드 3장을 모으면 상위 카드로 <b>신격화</b>! 점수와 가호가 올라가요.</p>
+      <h4>■ 영웅 능력</h4>
+      <p>한 판에 한 번 사용할 수 있는 특별한 능력. (스토리 모드·일반전)</p>
+      <h4>■ 승리 조건</h4>
+      <p>18점 달성 → 마지막 라운드 → 최고점이 승리!<br>동점은 신격화 횟수 → 앞면 카드 수 순으로 결정해요.</p>
+    </div>
+    <div class="btnrow"><button class="btn primary" data-action="howto-close">닫기</button></div>
+  </div></div>`;
+}
+
+// 게임 시작 전 난이도 선택 (일반전)
+export function diffSelectHTML(current) {
+  const multLabel = { easy: '×0.7', normal: '×1.0', hard: '×1.4', veryhard: '×2.0' };
+  return `<div class="overlay"><div class="panel">
+    <div class="title big">난이도 선택</div>
+    <p class="sheet-p">AI의 강도와 보상 배율이 바뀌어요.<br>선택은 저장되어 다음에도 유지됩니다.</p>
+    <div class="diffrow">
+      ${[['easy', '쉬움'], ['normal', '보통'], ['hard', '어려움'], ['veryhard', '매우어려움']].map(([v, l]) =>
+        `<button class="diffbtn ${current === v ? 'sel' : ''}" data-action="difficulty" data-v="${v}">${l}<small>${multLabel[v]}</small></button>`).join('')}
+    </div>
+    <div class="btnrow">
+      <button class="btn" data-action="diff-back">← 모드 선택</button>
+      <button class="btn primary" data-action="diff-start">⚔️ 시작!</button>
+    </div>
+  </div></div>`;
+}
+
+// 게임 중 타이틀로 가기 확인
+export function quitConfirmHTML() {
+  return `<div class="overlay"><div class="panel">
+    <div class="title big">🏠 타이틀로</div>
+    <p class="sheet-p">게임을 그만두고 타이틀로 돌아갈까요?<br><small>진행 중인 게임은 자동 저장되어 이어할 수 있어요.</small></p>
+    <div class="btnrow">
+      <button class="btn alt" data-action="quit-cancel">계속하기</button>
+      <button class="btn primary" data-action="quit-yes">타이틀로</button>
+    </div>
   </div></div>`;
 }
 
@@ -505,8 +553,8 @@ export function journeyHeroesHTML(heroes) {
   </div></div>`;
 }
 
-// 스테이지 인트로 (스토리 화면)
-export function journeyStageHTML(heroName, stage) {
+// 스테이지 인트로 (스토리 화면) — userDiff: 사용자 선택 난이도 (스테이지 기본 강도에 가감)
+export function journeyStageHTML(heroName, stage, userDiff = 'normal') {
   if (!stage) return '';
   const boss = stage.boss;
   const oppList = stage.opponents.map((o) => {
@@ -514,7 +562,9 @@ export function journeyStageHTML(heroName, stage) {
     const face = heroFaceSrc(o);
     return `<div class="oppchip ${isB ? 'boss' : ''}">${face ? `<img src="${face}" alt="">` : ''}<span>${isB ? '👹 ' : ''}${esc(o)}</span></div>`;
   }).join('');
-  const diffLabel = { easy: '쉬움', normal: '보통', hard: '어려움', veryhard: '매우 어려움' }[stage.aiDifficulty] ?? '';
+  const effDiff = effectiveJourneyDifficulty(stage.aiDifficulty, userDiff);
+  const diffLabel = { easy: '쉬움', normal: '보통', hard: '어려움', veryhard: '매우 어려움' };
+  const multLabel = { easy: '×0.7', normal: '×1.0', hard: '×1.4', veryhard: '×2.0' };
   return `<div class="overlay"><div class="panel">
     <div class="title big">스테이지 ${stage.n}<small>${esc(stage.name)}</small></div>
     <div class="storybox">${stage.story.map((l) => `<p>${esc(l)}</p>`).join('')}</div>
@@ -522,12 +572,28 @@ export function journeyStageHTML(heroName, stage) {
     <div class="oppchips">${oppList}</div>
     ${boss ? `<p class="sheet-p boss-warn">👹 <b>${esc(boss.name)}</b> (${esc(boss.title)}) — 1등 승리 시 다음 스테이지!</p>`
       : `<p class="sheet-p">1등 승리 시 다음 스테이지 해금!</p>`}
-    <p class="sheet-p"><small>AI 강도: ${diffLabel}</small></p>
+    <div class="difflabel">난이도 선택 <small>스테이지 기본 강도(${diffLabel[stage.aiDifficulty] ?? ''})에 가감돼요</small></div>
+    <div class="diffrow">
+      ${[['easy', '쉬움'], ['normal', '보통'], ['hard', '어려움'], ['veryhard', '매우어려움']].map(([v, l]) =>
+        `<button class="diffbtn ${userDiff === v ? 'sel' : ''}" data-action="difficulty" data-v="${v}">${l}<small>${multLabel[v]}</small></button>`).join('')}
+    </div>
+    <p class="sheet-p"><small>실효 AI 강도: <b>${diffLabel[effDiff]}</b></small></p>
     <div class="btnrow">
       <button class="btn" data-action="journey-back">← 슬롯 선택</button>
       <button class="btn primary" data-action="journey-stage-start">⚔️ 도전!</button>
     </div>
   </div></div>`;
+}
+
+// 스토리 모드 실효 AI 강도: 스테이지 기본 강도에 사용자 난이도를 가감
+// easy=0, normal=1, hard=2, veryhard=3 → user가 normal이면 그대로, easy면 -1, hard면 +1, veryhard면 +2
+export function effectiveJourneyDifficulty(stageBase, userDiff) {
+  const order = ['easy', 'normal', 'hard', 'veryhard'];
+  const bi = order.indexOf(stageBase);
+  const ui = order.indexOf(userDiff);
+  if (bi < 0) return order.includes(userDiff) ? userDiff : 'normal';
+  if (ui < 0) return stageBase;
+  return order[Math.min(3, Math.max(0, bi + (ui - 1)))];
 }
 
 // 엔딩 화면
@@ -630,11 +696,16 @@ export function tutorialHTML(tut) {
   </div>`;
 }
 
-export function optionsHTML(options) {
+export function optionsHTML(options, wipeConfirm = false) {
   const av = options.playerAvatar ?? -1;
   const avBtns = [-1, 0, 1, 2, 3].map((i) =>
     `<button class="avbtn ${av === i ? 'sel' : ''}" data-action="avatar" data-v="${i}">${i === -1 ? '🎲' : `<img src="${playerAvatarSrc(i)}" alt="아바타 ${i + 1}">`}</button>`
   ).join('');
+  const wipeRow = wipeConfirm
+    ? `<div class="wiperow"><p class="sheet-p warn"><b>정말 모든 데이터를 삭제할까요?</b><br><small>도감·업적·기록·여정 슬롯이 모두 사라집니다.</small></p>
+      <div class="btnrow"><button class="btn alt" data-action="wipe-cancel">취소</button>
+      <button class="btn danger" data-action="wipe-yes">삭제하기</button></div></div>`
+    : `<div class="btnrow"><button class="btn ghost danger-text" data-action="wipe-ask">🗑️ 저장 데이터 초기화</button></div>`;
   return `<div class="overlay"><div class="panel">
     <div class="title big">설정</div>
     <button class="optrow" data-action="toggle-help">
@@ -642,10 +713,14 @@ export function optionsHTML(options) {
       <span class="toggle ${options.beginnerHelp ? 'on' : ''}">${options.beginnerHelp ? '켬' : '끔'}</span>
     </button>
     <p class="sheet-p">게임 중 상황에 맞는 도움말을 보여줘요.</p>
+    <button class="optrow" data-action="toggle-sound">
+      <span>🔊 사운드</span>
+      <span class="toggle ${options.sound !== false ? 'on' : ''}">${options.sound !== false ? '켬' : '끔'}</span>
+    </button>
     <div class="difflabel">내 아바타</div>
     <div class="avrow">${avBtns}</div>
     <p class="sheet-p">일반전에서 "나"의 모습이에요. 🎲는 매 게임 랜덤.</p>
-    <div class="btnrow"><button class="btn ghost" data-action="restart">타이틀로 돌아가기</button></div>
+    ${wipeRow}
     <div class="btnrow"><button class="btn primary" data-action="options-close">닫기</button></div>
   </div></div>`;
 }
@@ -713,17 +788,6 @@ export function endHTML(ctrl) {
   if (m) {
     const parts = [];
     if (m.xp) parts.push(`<div class="metarow">📈 ${m.xp.hero} +${m.xp.gained} XP → Lv.${m.xp.level} ${m.xp.title}${m.xp.leveledUp ? ' <b>🎉 레벨업!</b>' : ''}</div>`);
-    if (m.league) {
-      const ascended = m.league.promoted && m.league.tier.id === 'god';
-      const beaten = m.league.bossBeaten ? `👹 ${m.league.bossBeaten.name} 격파! ` : '';
-      const pendingHint = !m.league.promoted && m.league.pending
-        ? ` 👹 <b>${m.league.pending.boss.name}</b> 승급전 도전 가능!`
-        : '';
-      parts.push(`<div class="metarow">🏆 리그 +${m.league.gained}점 → ${m.league.tier.icon} ${m.league.tier.name}`
-        + `${m.league.promoted ? ` <b>${beaten}👑 승급!${ascended ? ' 신에 오르셨습니다!' : ''}</b>` : ` (${m.league.next ? `${m.league.next.name}까지 ${m.league.toGo}점` : '최고 티어'})${pendingHint}`}</div>`);
-    }
-    if (m.daily?.isNew) parts.push(`<div class="metarow">✅ 일일 도전 완료: ${m.daily.name}${m.daily.streak > 1 ? ` (🔥 ${m.daily.streak}일 연속)` : ''}</div>`);
-    if (m.weekly?.isNew) parts.push(`<div class="metarow">✅ 주간 도전 완료: ${m.weekly.name}</div>`);
     if (parts.length) metaLine = `<div class="metabox">${parts.join('')}</div>`;
   }
   return `<div class="overlay"><div class="panel">
@@ -738,11 +802,15 @@ export function endHTML(ctrl) {
 }
 
 export function achvHTML(unlocked) {
-  const rows = ACHIEVEMENTS.map((a) => {
-    const got = !!unlocked[a.id];
-    const league = a.mode === 'league' ? '<span class="achvleague">🏆 리그</span>' : '';
-    return `<div class="achvrow ${got ? 'got' : ''}"><span class="achvicon">${got ? a.icon : '🔒'}</span>
-      <div><b>${a.name}</b>${league}<br><small>${a.desc}</small></div></div>`;
+  const rows = ACHV_CATS.map(([cat, label]) => {
+    const items = ACHIEVEMENTS.filter((a) => a.cat === cat);
+    const gotN = items.filter((a) => unlocked[a.id]).length;
+    const itemRows = items.map((a) => {
+      const got = !!unlocked[a.id];
+      return `<div class="achvrow ${got ? 'got' : ''}"><span class="achvicon">${got ? a.icon : '🔒'}</span>
+        <div><b>${a.name}</b><br><small>${a.desc}</small></div></div>`;
+    }).join('');
+    return `<div class="achvcat"><div class="achvchead">${label} <small>${gotN}/${items.length}</small></div>${itemRows}</div>`;
   }).join('');
   const n = Object.keys(unlocked).length;
   return `<div class="overlay"><div class="panel">

@@ -103,7 +103,7 @@ export function loadSave(storage, cards) {
 // ---------- Options ----------
 // { v:1, beginnerHelp: bool }
 
-const defaultOptions = () => ({ v: 1, beginnerHelp: true, difficulty: 'normal', personality: 'random', playerName: '', playerAvatar: -1 });
+const defaultOptions = () => ({ v: 1, beginnerHelp: true, difficulty: 'normal', personality: 'random', playerName: '', playerAvatar: -1, sound: true });
 
 const DIFFS = new Set(['easy', 'normal', 'hard', 'veryhard']);
 const PERSS = new Set(['random', 'specialized', 'opportunistic', 'balanced']);
@@ -119,6 +119,7 @@ export function loadOptions(storage) {
     personality: PERSS.has(o.personality) ? o.personality : 'random',
     playerName: typeof o.playerName === 'string' ? o.playerName.slice(0, 12) : '',
     playerAvatar: av, // -1 = 랜덤, 0~3 = 고정
+    sound: o.sound !== false,
   };
 }
 
@@ -131,6 +132,7 @@ export function saveOptions(storage, opts) {
     personality: PERSS.has(opts.personality) ? opts.personality : 'random',
     playerName: typeof opts.playerName === 'string' ? opts.playerName.slice(0, 12) : '',
     playerAvatar: av,
+    sound: opts.sound !== false,
   });
 }
 
@@ -166,7 +168,7 @@ export function victoryScore({ won, points, turns, difficulty }) {
 
 export function loadRecords(storage) {
   const o = readJSON(storage, RECORDS_KEY);
-  if (!isObj(o)) return { v: 1, best: 0, games: 0, wins: 0, history: [], byHero: {}, curStreak: 0, bestStreak: 0, fastestWin: null, mostPoints: null };
+  if (!isObj(o)) return { v: 1, best: 0, games: 0, wins: 0, history: [], byHero: {}, curStreak: 0, bestStreak: 0, fastestWin: null, mostPoints: null, totalEvos: 0 };
   return {
     v: 1,
     best: typeof o.best === 'number' ? o.best : 0,
@@ -178,6 +180,7 @@ export function loadRecords(storage) {
     bestStreak: Math.max(0, o.bestStreak | 0),
     fastestWin: isObj(o.fastestWin) ? o.fastestWin : null,
     mostPoints: isObj(o.mostPoints) ? o.mostPoints : null,
+    totalEvos: Math.max(0, o.totalEvos | 0),
   };
 }
 
@@ -204,6 +207,8 @@ export function recordResult(storage, result, now = Date.now()) {
   }
   // 최고 점수 (승패 무관)
   if (!r.mostPoints || result.points > r.mostPoints.points) r.mostPoints = { points: result.points, date: now };
+  // 누적 신격화 횟수
+  r.totalEvos = (r.totalEvos | 0) + Math.max(0, result.evos | 0);
   r.history.push({ score, ...result, date: now });
   r.history = r.history.slice(-20);
   writeJSON(storage, RECORDS_KEY, r);
@@ -327,18 +332,17 @@ export function clearJourneySlot(storage, slotIdx) {
 }
 
 // ---------- Challenges ----------
+// 퍼즐 챌린지 완료 기록
 // { v:1, completed: { [id]: timestamp } }
 
 export const CHAL_KEY = 'odo-chal-v1';
 
 export function loadChal(storage) {
   const o = readJSON(storage, CHAL_KEY);
-  if (!isObj(o)) return { v: 1, completed: {}, streak: { count: 0, last: '' } };
-  const streak = isObj(o.streak) ? o.streak : {};
+  if (!isObj(o)) return { v: 1, completed: {} };
   return {
     v: 1,
     completed: isObj(o.completed) ? o.completed : {},
-    streak: { count: Math.max(0, streak.count | 0), last: typeof streak.last === 'string' ? streak.last : '' },
   };
 }
 
@@ -352,19 +356,12 @@ export function completeChal(storage, id, now = Date.now()) {
   return false;
 }
 
-// 일일 도전 완료 + 연속 클리어 스트릭 (dateStr: 'YYYY-MM-DD')
-// 어제 완료했으면 +1, 오늘이면 유지, 그 외는 1로 리셋
-export function completeDaily(storage, id, dateStr, now = Date.now()) {
-  const c = loadChal(storage);
-  let isNew = false;
-  if (!c.completed[id]) {
-    c.completed[id] = now;
-    isNew = true;
-    const dt = new Date(Number(dateStr.slice(0, 4)), Number(dateStr.slice(5, 7)) - 1, Number(dateStr.slice(8)) - 1);
-    const yesterday = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-    c.streak.count = c.streak.last === yesterday ? c.streak.count + 1 : (c.streak.last === dateStr ? c.streak.count : 1);
-    c.streak.last = dateStr;
+// ---------- 전체 데이터 초기화 ----------
+
+const ALL_KEYS = [DEX_KEY, SAVE_KEY, OPTS_KEY, ACHV_KEY, RECORDS_KEY, HERO_KEY, JOURNEY_KEY, CHAL_KEY];
+
+export function wipeAll(storage) {
+  for (const k of ALL_KEYS) {
+    try { storage.removeItem(k); } catch {}
   }
-  writeJSON(storage, CHAL_KEY, c);
-  return { isNew, streak: c.streak.count };
 }

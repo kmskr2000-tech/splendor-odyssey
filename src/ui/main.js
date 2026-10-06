@@ -13,19 +13,17 @@ try {
   }
 } catch (e) { /* 버전 확인 실패 시 조용히 진행 */ }
 
-import { CARDS } from '../data/cards.js?v=1791287115';
-import { ALL_OPPONENTS } from '../data/heroes.js?v=1791287115';
-import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791287115';
-import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791287115';
-import { JOURNEY_HEROES, journeyStagesOf, journeyStageOf, JOURNEY_ENDING } from '../data/journey.js?v=1791287115';
-import { createController } from './controller.js?v=1791287115';
-import * as V from './view.js?v=1791287115';
-import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791287115';
-import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal, loadHero, getHero, loadJourney, startJourneySlot, advanceJourneyStage, clearJourneySlot } from '../storage/store.js?v=1791287115';
-import { todayStr } from '../data/dates.js?v=1791287115';
-import { dailyChallenge, weeklyChallenge } from '../data/daily.js?v=1791287115';
-import { settleMeta } from '../meta/settle.js?v=1791287115';
-import { NetSession } from '../net/session.js?v=1791287115';
+import { CARDS } from '../data/cards.js?v=1791288149';
+import { ALL_OPPONENTS } from '../data/heroes.js?v=1791288149';
+import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791288149';
+import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791288149';
+import { JOURNEY_HEROES, journeyStagesOf, journeyStageOf, JOURNEY_ENDING } from '../data/journey.js?v=1791288149';
+import { createController } from './controller.js?v=1791288149';
+import * as V from './view.js?v=1791288149';
+import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791288149';
+import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal, loadHero, getHero, loadJourney, startJourneySlot, advanceJourneyStage, clearJourneySlot, wipeAll, dexSummary } from '../storage/store.js?v=1791288149';
+import { settleMeta } from '../meta/settle.js?v=1791288149';
+import { NetSession } from '../net/session.js?v=1791288149';
 
 // In-app browser guard: KakaoTalk/etc. popups die when swiped away, killing
 // multiplayer. iOS can't force-open Safari from JS, so detect and guide.
@@ -75,11 +73,15 @@ let ctrl = null;
 let aiTimer = null;
 let dexOpen = false;
 let rulesOpen = false;
+let howtoOpen = false;
 let achvOpen = false;
 let recordsOpen = false;
 let chalOpen = false;
 let tutorial = null; // { step } — guided first-game tutorial
 let optionsOpen = false;
+let wipeConfirm = false; // 설정: 데이터 초기화 확인 중
+let quitConfirm = false; // 게임 중 타이틀로 가기 확인 중
+let diffPending = false; // 일반전: 난이도 선택 화면 표시 중
 let net = null; // NetSession while in multiplayer menu/lobby/game
 let netNotice = ''; // one-shot notice shown on the start/net screen
 let netHelpOpen = false;
@@ -108,8 +110,7 @@ function render() {
   if (!introDone) {
     overlay = V.introHTML();
   } else if (!modeDone && !ctrl) {
-    const dv = dailyView();
-    overlay = V.modeHTML({ daily: dv.daily, weekly: dv.weekly, chalDone: dv.done, streak: dv.streak });
+    overlay = V.modeHTML();
   } else if (netHelpOpen && net) {
     overlay = V.netHelpHTML();
   } else if (net && !ctrl) {
@@ -118,6 +119,8 @@ function render() {
   } else if (net && ctrl && !ctrl.finished && net.dropped && Object.keys(net.dropped).length > 0) {
     overlay = V.rejoinWaitHTML(net);
     netNotice = '';
+  } else if (quitConfirm && ctrl && !ctrl.finished) {
+    overlay = V.quitConfirmHTML();
   } else {
     overlay = !ctrl ? singleStartHTML() : ctrl.finished ? V.endHTML(ctrl) : '';
     netNotice = '';
@@ -125,10 +128,11 @@ function render() {
   if (ctrl?.challengeDone) overlay = V.challengeEndHTML(ctrl.challengeDone === 'won', ctrl.challenge);
   if (dexOpen) overlay = V.dexHTML(loadDex(storage), CARDS);
   else if (rulesOpen) overlay = V.rulesHTML();
+  else if (howtoOpen) overlay = V.howtoHTML();
   else if (achvOpen) overlay = V.achvHTML(loadAchv(storage).unlocked);
   else if (recordsOpen) overlay = V.recordsHTML(loadRecords(storage));
   else if (chalOpen) overlay = V.challengeListHTML(loadChal(storage).completed);
-  else if (optionsOpen) overlay = V.optionsHTML(options);
+  else if (optionsOpen) overlay = V.optionsHTML(options, wipeConfirm);
   setHTML('overlay', overlay);
   scheduleAI();
 }
@@ -249,18 +253,6 @@ function heroesView() {
   return out;
 }
 
-function dailyView() {
-  const dateStr = todayStr();
-  const chal = loadChal(storage);
-  return {
-    daily: dailyChallenge(dateStr),
-    weekly: weeklyChallenge(dateStr),
-    done: chal.completed,
-    streak: chal.streak.count,
-    dateStr,
-  };
-}
-
 function queueAchvToasts(list) {
   achvToasts = achvToasts.concat(list);
   renderAchvToast();
@@ -293,18 +285,40 @@ const hooks = {
       const journey = ctrl.journey;
       const stageN = journey?.stage ?? 0;
       const bossBeaten = (won && rank === 1 && ctrl.boss) ? ctrl.boss : null;
+      const points = getPoints(me);
+      // 2위와의 점수차 (우승 시)
+      let margin = 0;
+      if (won && rank === 1) {
+        const runner = ctrl.game.ranking.find((r) => r.rank === 2);
+        if (runner) margin = points - (runner.points ?? 0);
+      }
+      // 기록 먼저 정산 (연승·누적 신격화 업적에 필요)
+      const isSingleGame = !ctrl.mp && !ctrl.challenge;
+      const rec = recordResult(storage, {
+        won, points, turns: ctrl.game.turn, difficulty: ctrl.difficulty,
+        hero: isSingleGame ? ctrl.humanName : undefined, evos: me.evolved.length,
+      });
+      ctrl.lastScore = rec.score;
+      ctrl.lastBest = rec.isBest;
+      const recs = loadRecords(storage);
+      const dexSum = dexSummary(loadDex(storage), CARDS);
       const ctx = {
         won,
         turns: ctrl.game.turn,
         evolutions: me.evolved.length,
         difficulty: ctrl.difficulty,
-        points: getPoints(me),
+        points,
+        margin,
         bonusColors,
+        masterTokens: me.tokens?.master ?? 0,
         caughtLegend,
         journeyMode: !!journey,
         journeyStage: (won && rank === 1 && journey) ? stageN : 0,
         rank,
         bossBeaten,
+        streak: recs.curStreak,
+        totalEvos: recs.totalEvos,
+        dexCaught: dexSum.caught,
       };
       const newly = checkAchievements(ctx, loadAchv(storage).unlocked);
       if (newly.length) {
@@ -313,7 +327,6 @@ const hooks = {
       }
       // 메타 정산: 싱글모드(챌린지·튜토리얼 제외)에서만. 멀티는 완전 바닐라.
       // - XP: 실제 영웅 이름으로 플레이할 때만 (여정 모드 오디세우스, 일반전 "나"는 제외)
-      const isSingleGame = !ctrl.mp && !ctrl.challenge;
       if (isSingleGame) {
         ctrl.metaResult = settleMeta(storage, {
           won, rank, points: ctx.points, turns: ctrl.humanTurns,
@@ -321,13 +334,9 @@ const hooks = {
           heroName: (journey && ctrl.humanName !== '나') ? ctrl.humanName : null,
           journeyMode: !!journey,
           evolved: me.evolved.length, track: ctrl.track,
-          dateStr: todayStr(),
           bossBeaten,
         });
       }
-      const rec = recordResult(storage, { won, points: ctx.points, turns: ctx.turns, difficulty: ctx.difficulty, hero: isSingleGame ? ctrl.humanName : undefined });
-      ctrl.lastScore = rec.score;
-      ctrl.lastBest = rec.isBest;
       // 신의 여정: 1등 승리 시 다음 스테이지 해금
       if (journey && won && rank === 1) {
         advanceJourneyStage(storage, journey.slot, stageN);
@@ -411,7 +420,7 @@ function journeyNextStage() {
   return Math.min(s.stage + 1, journeyStagesOf(s.hero).length);
 }
 
-// 여정 스테이지 게임 시작
+// 여정 스테이지 게임 시작 (사용자 난이도가 스테이지 기본 강도에 가감됨)
 function startJourneyStage(slotIdx, stageN) {
   const j = loadJourney(storage);
   const slot = j.slots[slotIdx];
@@ -421,8 +430,9 @@ function startJourneyStage(slotIdx, stageN) {
   const seedParam = params.get('seed');
   const seed = seedParam !== null ? Number(seedParam) : (crypto.getRandomValues(new Uint32Array(1))[0] || 1);
   const aiNames = stage.opponents.slice();
+  const userDiff = options.difficulty;
   const scenario = {
-    aiDifficulty: stage.aiDifficulty,
+    aiDifficulty: V.effectiveJourneyDifficulty(stage.aiDifficulty, userDiff),
     boss: stage.boss ? stage.boss.name : null,
     journey: { slot: slotIdx, hero: slot.hero, stage: stageN },
   };
@@ -432,7 +442,7 @@ function startJourneyStage(slotIdx, stageN) {
   clearSave(storage);
   ctrl = createController({
     cards: CARDS, seed, humanName: slot.hero, aiNames, hooks,
-    difficulty: options.difficulty, scenario,
+    difficulty: userDiff, scenario,
   });
   saveGame(storage, ctrl.snapshot());
   Object.keys(cache).forEach((k) => delete cache[k]);
@@ -441,6 +451,10 @@ function startJourneyStage(slotIdx, stageN) {
 }
 
 function singleStartHTML() {
+  // 일반전: 난이도 선택 화면
+  if (diffPending) {
+    return V.diffSelectHTML(options.difficulty);
+  }
   // 신의 여정 모드
   if (singleMode === 'journey') {
     const j = loadJourney(storage);
@@ -458,7 +472,7 @@ function singleStartHTML() {
     if (journeyStageIntro !== null && journeySlot !== null) {
       const slot = j.slots[journeySlot];
       const stage = journeyStageOf(slot.hero, journeyStageIntro);
-      return V.journeyStageHTML(slot.hero, stage);
+      return V.journeyStageHTML(slot.hero, stage, options.difficulty);
     }
     // 슬롯 선택
     return V.journeySlotsHTML(j.slots);
@@ -521,6 +535,13 @@ function startChallenge(id) {
   render();
 }
 
+function quitToTitle() {
+  if (net) net.end();
+  ctrl = null; tutorial = null; optionsOpen = false; modeDone = false;
+  quitConfirm = false; wipeConfirm = false; diffPending = false;
+  clearTimeout(aiTimer); aiTimer = null;
+}
+
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-action]');
   if (!el || el.disabled) return;
@@ -530,8 +551,18 @@ document.addEventListener('click', (e) => {
     case 'mode-single': {
       singleMode = 'normal'; modeDone = true;
       journeySlot = null; journeyStageIntro = null; journeyEnding = false;
-      // 일반전: "나"로 즉시 시작 (영웅 선택 스킵, 능력은 랜덤)
+      // 일반전: 난이도 선택 화면 먼저
+      diffPending = true;
+      break;
+    }
+    case 'diff-start': {
+      diffPending = false;
+      // 일반전: "나"로 시작 (영웅 선택 스킵, 능력은 랜덤)
       startGame('나'); return;
+    }
+    case 'diff-back': {
+      diffPending = false; modeDone = false;
+      break;
     }
     case 'mode-journey': {
       singleMode = 'journey'; modeDone = true;
@@ -588,6 +619,8 @@ document.addEventListener('click', (e) => {
     case 'dex-close': dexOpen = false; break;
     case 'rules': rulesOpen = true; break;
     case 'rules-close': rulesOpen = false; break;
+    case 'howto': howtoOpen = true; break;
+    case 'howto-close': howtoOpen = false; break;
     case 'achv': achvOpen = true; break;
     case 'achv-close': achvOpen = false; break;
     case 'records': recordsOpen = true; break;
@@ -601,6 +634,20 @@ document.addEventListener('click', (e) => {
       options.beginnerHelp = !options.beginnerHelp;
       saveOptions(storage, options);
       break;
+    case 'toggle-sound':
+      options.sound = options.sound === false;
+      saveOptions(storage, options);
+      break;
+    case 'wipe-ask': wipeConfirm = true; break;
+    case 'wipe-cancel': wipeConfirm = false; break;
+    case 'wipe-yes': {
+      wipeAll(storage);
+      wipeConfirm = false;
+      // 옵션도 초기화됐으므로 다시 로드
+      Object.assign(options, loadOptions(storage));
+      showInfoToast('<span class="achvicon">🗑️</span><div><b>모든 데이터가 초기화됐어요</b></div>');
+      break;
+    }
     case 'avatar': {
       const v = parseInt(d.v, 10);
       if (v >= -1 && v < 4) { options.playerAvatar = v; saveOptions(storage, options); }
@@ -622,8 +669,13 @@ document.addEventListener('click', (e) => {
       break;
     }
     case 'restart':
-      if (net) net.end();
-      ctrl = null; tutorial = null; optionsOpen = false; modeDone = false; clearTimeout(aiTimer); aiTimer = null; break;
+      quitToTitle(); break;
+    case 'quit-confirm':
+      if (ctrl && !ctrl.finished) quitConfirm = true;
+      else quitToTitle();
+      break;
+    case 'quit-cancel': quitConfirm = false; break;
+    case 'quit-yes': quitToTitle(); break;
     // ----- multiplayer -----
     case 'net': openNet(); break;
     case 'net-menu': if (net) { net.phase = 'menu'; netNotice = ''; } break;
