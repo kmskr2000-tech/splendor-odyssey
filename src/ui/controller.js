@@ -5,10 +5,9 @@
 import {
   COLORS, MASTER, PHASES, MAX_HAND,
   createGame, applyAction, legalActions, computePayment, evolveOptions, getCurrentPlayer, tokenCount,
-} from '../core/index.js?v=1791283426';
-import { chooseAction } from '../ai/heuristic.js?v=1791283426';
-import { abilityOf, abilityInfo, PLAYABLE_HEROES, isBoss, personalityOf, ABILITY_IDS } from '../data/heroes.js?v=1791283426';
-import { TIERS, effectiveDifficulty } from '../data/league.js?v=1791283426';
+} from '../core/index.js?v=1791285379';
+import { chooseAction } from '../ai/heuristic.js?v=1791285379';
+import { abilityOf, abilityInfo, PLAYABLE_HEROES, isBoss, personalityOf, ABILITY_IDS } from '../data/heroes.js?v=1791285379';
 
 export const BALLS = {
   monster: { file: 'ball-thunder', ext: 'webp', name: '천둥의 가호', short: '천둥' },
@@ -39,19 +38,12 @@ const ERROR_TEXT = {
 
 export const errorText = (code) => ERROR_TEXT[code] ?? `실행할 수 없어요 (${code})`;
 
-// 유효 AI 난이도 = clamp(티어 베이스 + 플레이어 보정). 승급전은 보스 고정 강도.
-function effectiveAiDifficulty({ leagueTier, difficulty, promotion }) {
-  if (promotion) return 'hard';
-  if (leagueTier) return effectiveDifficulty(leagueTier.ai, difficulty);
-  return effectiveDifficulty('normal', difficulty); // 일반전 베이스 normal
-}
-
-// `resume` ({ game, log }) restores a saved game instead of dealing a new one.
-// `hooks.onCatch(cardId, kind)` fires for the human's captures/evolutions, `hooks.onChange()` after
-// every accepted action, `hooks.onEnd(won)` once when the game finishes (persistence lives outside).
-// leagueTier: 올림포스 리그전 티어 객체 (AI 로스터·성격·난이도 적용). 멀티플레이어에서는 절대 사용하지 않음.
-// promotion: { to: 승급 목표 티어 id, boss: 보스 이름 } | null — 승급전(보스전) 모드.
-export function createController({ cards, seed, humanName = '나', aiNames = ['오디세우스', '헤라클레스', '아킬레우스'], resume = null, hooks = {}, difficulty = 'normal', challenge = null, mp = null, leagueTier = null, promotion = null }) {
+// 스토리 모드 시나리오: { aiDifficulty, boss: 이름|null, journey: { slot, hero, stage } | null }
+// - aiDifficulty: 해당 스테이지/모드의 AI 강도 (플레이어 선택 난이도와 무관하게 시나리오가 정함)
+// - boss: 보스 이름 (능력 사용 + BOSS 표시). null이면 일반전.
+// - journey: 신의 여정 정보. null이면 일반전/도전/튜토리얼.
+// 멀티플레이어에서는 절대 사용하지 않음.
+export function createController({ cards, seed, humanName = '나', aiNames = ['오디세우스', '헤라클레스', '아킬레우스'], resume = null, hooks = {}, difficulty = 'normal', challenge = null, mp = null, scenario = null }) {
   const cardsById = new Map(cards.map((c) => [c.id, c]));
   // mp: { names: [...humanNames], me: index, aiNames: [...] } — multiplayer.
   // Humans first, then AI seats (acted by the host, relayed to guests).
@@ -95,13 +87,13 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
     humanName,
     aiNames,
     difficulty: resume?.difficulty ?? difficulty,
-    // 리그전: AI 난이도는 티어 베이스 × 플레이어 선택. 승급전은 보스 고정 강도(hard).
-    // 보상 배율에만 플레이어 선택 난이도 사용.
-    aiDifficulty: resume?.aiDifficulty ?? effectiveAiDifficulty({ leagueTier, difficulty, promotion }),
-    leagueMode: resume?.leagueMode ?? !!leagueTier,
-    // 승급전(보스전): { to, boss } | null. 1등 승리 시 to 티어로 승급.
-    promotion: resume?.promotion ?? promotion,
-    get promotionMatch() { return !!this.promotion; },
+    // AI 난이도: 시나리오가 지정 (스토리 스테이지별 강도). 없으면 플레이어 선택 사용.
+    aiDifficulty: resume?.aiDifficulty ?? scenario?.aiDifficulty ?? difficulty,
+    journeyMode: resume?.journeyMode ?? !!scenario?.journey,
+    // 스토리 보스전: { name } | null. 보스는 능력 사용 + BOSS 표시.
+    boss: resume?.boss ?? scenario?.boss ?? null,
+    get bossMatch() { return !!this.boss; },
+    journey: resume?.journey ?? scenario?.journey ?? null,
     challenge: resume?.challenge ?? challenge,
     challengeDone: null, // 'won' | 'lost' once the challenge resolves
     humanTurns: 0, // completed turns by the human (for challenge limits)
@@ -109,11 +101,8 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
     track: resume?.track ?? { reserve: 0, take: {} },
     // 영웅 능력 armed 상태 (UI가 켜고 끔)
     abilityArmed: null,
-    // Secret AI personalities: shuffled per game, hidden from the player.
-    // 리그전은 티어 로스터의 고정 성격, 일반전은 27 캐릭터 풀의 고정 성격 사용.
-    aiPersonalities: resume?.aiPersonalities ?? (leagueTier
-      ? Array.from({ length: playerCount }, (_, i) => (i === 0 ? 'balanced' : leagueTier.roster[i - 1].personality))
-      : ['balanced', ...aiNames.map(personalityOf)]),
+    // Secret AI personalities: 캐릭터별 고정 성격 사용.
+    aiPersonalities: resume?.aiPersonalities ?? ['balanced', ...aiNames.map(personalityOf)],
     errors: 0, // failed applyAction calls (tests assert 0 for UI-generated actions)
 
     get state() { return this.game; },
@@ -348,7 +337,7 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
     pass() { return this.dispatch({ type: 'pass' }); },
 
     snapshot() {
-      return { seed: this.seed, humanName: this.humanName, aiNames: this.aiNames, difficulty: this.difficulty, aiDifficulty: this.aiDifficulty, leagueMode: this.leagueMode, promotion: this.promotion, aiPersonalities: this.aiPersonalities, challenge: this.challenge, log: this.log, track: this.track, game: this.game };
+      return { seed: this.seed, humanName: this.humanName, aiNames: this.aiNames, difficulty: this.difficulty, aiDifficulty: this.aiDifficulty, journeyMode: this.journeyMode, boss: this.boss, journey: this.journey, aiPersonalities: this.aiPersonalities, challenge: this.challenge, log: this.log, track: this.track, game: this.game };
     },
 
     // Grants the challenge's starting tokens/tableau (puzzle setup).

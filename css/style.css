@@ -504,10 +504,11 @@ button.orsv:hover { border-color: #4ade80; }
 
 /* ---------- meta systems (league / hero / daily / ability) ---------- */
 .leaguebadge {
-  display: flex; align-items: center; gap: 10px;
   background: #1e1e30; border: 3px solid var(--tier, #8a6f4d);
   padding: 10px 12px; margin: 8px 0; box-shadow: 3px 3px 0 var(--ink);
 }
+.leaguelabel { font-size: 12px; color: #a5b4fc; margin-bottom: 6px; }
+.leaguerow { display: flex; align-items: center; gap: 10px; }
 .leaguebadge.glow {
   box-shadow: 0 0 12px var(--tier, #ffd700), 3px 3px 0 var(--ink);
   border-color: var(--tier, #ffd700);
@@ -556,3 +557,21 @@ button.orsv:hover { border-color: #4ade80; }
 .promobanner { background: linear-gradient(135deg, #3a1c1c, #1e1e2a); border: 2px solid #ffd700; border-radius: 10px; padding: 10px 12px; margin: 10px 0; font-size: 16px; font-weight: bold; color: #ffd700; text-align: center; box-shadow: 0 0 12px rgba(255, 215, 0, .35); }
 .promobanner small { display: block; font-size: 12px; font-weight: normal; color: #f0d9a0; margin-top: 4px; }
 .promo-hint { color: #ffd700; font-weight: bold; }
+
+/* ---------- 신의 여정 ---------- */
+.slotlist { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.slotbtn { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
+.slotbtn.empty { justify-content: center; flex-direction: column; padding: 16px; border-style: dashed; }
+.slotbtn.filled { display: flex; }
+.slotbtn .slotmain { flex: 1; display: flex; align-items: center; gap: 10px; background: none; border: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.slotbtn .slotdel { background: none; border: none; font-size: 18px; cursor: pointer; padding: 8px; }
+.slotnum { font-weight: bold; }
+.tile.locked { opacity: 0.55; cursor: not-allowed; }
+.tileface.dim { filter: grayscale(70%) brightness(0.7); }
+.storybox { background: #1e1e30; border: 2px solid var(--ink); padding: 12px; margin: 10px 0; }
+.storybox p { margin: 6px 0; line-height: 1.5; }
+.oppchips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.oppchip { display: flex; align-items: center; gap: 6px; background: #2a2a40; border: 2px solid var(--ink); padding: 4px 10px 4px 4px; border-radius: 20px; }
+.oppchip img { width: 28px; height: 28px; border-radius: 50%; }
+.oppchip.boss { border-color: #ff5555; box-shadow: 0 0 8px #ff5555; }
+.boss-warn { color: #ff8888; }

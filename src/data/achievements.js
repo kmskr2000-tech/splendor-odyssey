@@ -1,7 +1,7 @@
 // Local achievements. Each has check(ctx) where ctx is built at game end:
 // { won, turns, evolutions, difficulty, points, bonusColors:Set, caughtLegend,
-//   leagueMode, promotionMatch, bossBeaten, promotedTo }
-// mode: 'common' (양쪽 모드) | 'league' (리그전 전용)
+//   journeyMode, journeyStage(클리어한 스테이지 번호), bossBeaten(격파한 보스 이름) }
+// mode: 'common' (모든 모드) | 'journey' (신의 여정 전용)
 
 export const ACHIEVEMENTS = [
   // --- 공통 업적 ---
@@ -13,21 +13,19 @@ export const ACHIEVEMENTS = [
   { id: 'rainbow', mode: 'common', icon: '🌈', name: '무지개', desc: '5개 신역의 가호를 모두 보유하기', check: (c) => c.bonusColors.size >= 5 },
   { id: 'legend-catch', mode: 'common', icon: '✨', name: '전설 영입', desc: '전설 존재 영입', check: (c) => c.caughtLegend },
   { id: 'hard-win', mode: 'common', icon: '👑', name: '진정한 챔피언', desc: '어려움 난이도에서 승리하기', check: (c) => c.won && (c.difficulty === 'hard' || c.difficulty === 'veryhard') },
-  // --- 리그 전용 업적 ---
-  { id: 'first-promotion', mode: 'league', icon: '🏅', name: '첫 승급', desc: '첫 승급전(보스전)에서 승리하기', check: (c) => c.leagueMode && c.promotionMatch && c.rank === 1 },
-  { id: 'boss-minotaur', mode: 'league', icon: '👹', name: '미궁 정복', desc: '미노타우로스 격파하기', check: (c) => c.bossBeaten === '미노타우로스' },
-  { id: 'boss-medusa', mode: 'league', icon: '👹', name: '고르곤 처치', desc: '메두사 격파하기', check: (c) => c.bossBeaten === '메두사' },
-  { id: 'boss-hydra', mode: 'league', icon: '👹', name: '히드라 퇴치', desc: '히드라 격파하기', check: (c) => c.bossBeaten === '히드라' },
-  { id: 'boss-agamemnon', mode: 'league', icon: '👹', name: '정복왕 격파', desc: '아가멤논 격파하기', check: (c) => c.bossBeaten === '아가멤논' },
-  { id: 'boss-zeus', mode: 'league', icon: '👹', name: '신왕 초월', desc: '제우스 격파하기', check: (c) => c.bossBeaten === '제우스' },
-  { id: 'reach-demigod', mode: 'league', icon: '✨', name: '반신 달성', desc: '반신 티어에 도달하기', check: (c) => c.promotedTo === 'demigod' },
-  { id: 'reach-god', mode: 'league', icon: '🌟', name: '신 달성', desc: '신 티어에 도달하기', check: (c) => c.promotedTo === 'god' },
+  // --- 신의 여정 전용 업적 ---
+  { id: 'journey-start', mode: 'journey', icon: '⛵', name: '항해 시작', desc: '신의 여정 첫 스테이지 클리어하기', check: (c) => c.journeyMode && c.journeyStage >= 1 },
+  { id: 'journey-half', mode: 'journey', icon: '🌊', name: '반환점', desc: '신의 여정 3 스테이지 클리어하기', check: (c) => c.journeyMode && c.journeyStage >= 3 },
+  { id: 'boss-kirke', mode: 'journey', icon: '👹', name: '마녀 격파', desc: '키르케 격파하기', check: (c) => c.bossBeaten === '키르케' },
+  { id: 'boss-skylla', mode: 'journey', icon: '👹', name: '괴물 처치', desc: '스킬라 격파하기', check: (c) => c.bossBeaten === '스킬라' },
+  { id: 'boss-poseidon', mode: 'journey', icon: '👹', name: '바다의 신 초월', desc: '포세이돈 격파하기', check: (c) => c.bossBeaten === '포세이돈' },
+  { id: 'journey-complete', mode: 'journey', icon: '🌟', name: '신화 완성', desc: '오디세우스의 여정 완주하기', check: (c) => c.journeyMode && c.journeyStage >= 6 },
 ];
 
 export function checkAchievements(ctx, unlocked) {
   return ACHIEVEMENTS.filter((a) =>
     !unlocked[a.id] &&
-    (a.mode === 'common' || (a.mode === 'league' && ctx.leagueMode)) &&
+    (a.mode === 'common' || (a.mode === 'journey' && ctx.journeyMode)) &&
     a.check(ctx)
   );
 }

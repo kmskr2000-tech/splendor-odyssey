@@ -41,6 +41,10 @@ export const HERO_ABILITIES = {
   // --- 리그 로스터: 신 ---
   '아테나': { id: 'refreshRow', name: '지혜의 눈', desc: '진열된 카드 1줄 새로고침' },
   '아레스': { id: 'masterBonus', name: '전쟁의 전리품', desc: '카드 영입 시 암브로시아 1개 추가 획득' },
+  // --- 신의 여정 보스 (오디세우스 편) ---
+  '키르케': { id: 'refreshRow', name: '마법', desc: '진열된 카드 1줄 새로고침', boss: true },
+  '스킬라': { id: 'takeFour', name: '포식', desc: '가호 가져가기 때 4종류 획득', boss: true },
+  '포세이돈': { id: 'takeFour', name: '해일', desc: '가호 가져가기 때 4종류 획득', boss: true },
   // 제우스는 보스 겸 신 티어 로스터 (같은 캐릭터, 같은 능력)
 };
 
@@ -79,6 +83,13 @@ export const CHARACTER_PERSONALITY = {
   '헥토르': 'balanced', '아이아스': 'opportunistic', '메넬라오스': 'specialized',
   '벨레로폰': 'specialized', '오리온': 'opportunistic', '카스토르': 'balanced',
   '아테나': 'specialized', '아레스': 'opportunistic',
+  // 신의 여정 (오디세우스 편)
+  '키르케': 'specialized', '길들여진 멧돼지': 'opportunistic', '길들여진 사자': 'balanced',
+  '파르테노페': 'balanced', '레이코시아': 'specialized', '류코시아': 'opportunistic',
+  '스킬라': 'opportunistic', '심해 괴물': 'balanced', '파도 정령': 'specialized',
+  '칼립소': 'specialized', '바다 님프': 'balanced', '섬 님프': 'opportunistic',
+  '포세이돈': 'balanced',
+  '트로이 병사': 'balanced', '트로이 궁수': 'specialized', '트로이 창병': 'opportunistic',
 };
 
 export function personalityOf(name) {
