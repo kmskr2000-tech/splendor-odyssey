@@ -1,6 +1,5 @@
-# GitHub Actions: Android AAB 빌드
-# 사용법: GitHub 웹에서 splendor-odyssey 레포 → .github/workflows/android.yml 로 이 파일 내용을 붙여넣어 저장
-# (gh 토큰에 workflow scope가 없어 API/푸시로 추가 불가, 웹 UI로만 가능)
+# Android AAB 빌드 (Odyssey: The Card)
+# 실제 빌드 로직은 packaging/android-build.sh 에 있음 (git push로 업데이트 가능)
 # 실행: Actions 탭 → "Android AAB" → Run workflow
 # 결과: Artifacts에서 app-release.aab 다운로드 → Play Console에 업로드
 
@@ -29,40 +28,8 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Install Capacitor
-        run: |
-          npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/android
-
-      - name: Prepare web assets
-        run: |
-          mkdir -p build
-          cp index.html build/
-          cp -r src css assets build/
-          V=$(date +%s)
-          echo "{\"v\":$V}" > build/assets/version.json
-          cd build
-          sed -i "s|</head>|<script>window.__V=$V;</script>\n</head>|" index.html
-          sed -i -E "s|href=\"css/style\.css\"|href=\"css/style.css?v=$V\"|" index.html
-          sed -i -E "s|src=\"src/ui/main\.js\"|src=\"src/ui/main.js?v=$V\"|" index.html
-          find src -name '*.js' -exec sed -i -E "s|(from '[./][^']*)\.js'|\1.js?v=$V'|g" {} +
-
-      - name: Capacitor init + add android
-        run: |
-          npx cap init "${{ inputs.appName }}" tech.kmskr2000.odyssey --web-dir=build
-          npx cap add android
-
-      - name: App icons
-        run: |
-          # packaging/android-icons/ 를 레포에 커밋해두면 여기서 복사
-          if [ -d packaging/android-icons ]; then
-            cp -r packaging/android-icons/* android/app/src/main/res/
-          fi
-
-      - name: Build AAB (debug-signed)
-        run: |
-          cd android
-          ./gradlew bundleDebug
+      - name: Build AAB
+        run: bash packaging/android-build.sh "${{ inputs.appName }}"
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
