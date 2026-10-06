@@ -1,14 +1,14 @@
 // Pure HTML-string renderers. Each takes the controller and returns markup; main.js owns the DOM.
 // All text interpolated here comes from our own card data / constants (no user input).
 
-import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791282997';
-import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791282997';
-import { BALLS, TRAINERS, evoText } from './controller.js?v=1791282997';
-import { dexSummary } from '../storage/store.js?v=1791282997';
-import { abilityInfo, isBoss } from '../data/heroes.js?v=1791282997';
-import { tierProgressText, tierById } from '../data/league.js?v=1791282997';
-import { ACHIEVEMENTS } from '../data/achievements.js?v=1791282997';
-import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791282997';
+import { COLORS, MASTER, PHASES, TOKEN_KEYS } from '../core/constants.js?v=1791283426';
+import { getBonuses, getPoints, tokenCount, bonusList, isSpecial } from '../core/engine.js?v=1791283426';
+import { BALLS, TRAINERS, evoText } from './controller.js?v=1791283426';
+import { dexSummary } from '../storage/store.js?v=1791283426';
+import { abilityInfo, isBoss } from '../data/heroes.js?v=1791283426';
+import { tierProgressText, tierById } from '../data/league.js?v=1791283426';
+import { ACHIEVEMENTS } from '../data/achievements.js?v=1791283426';
+import { CHALLENGES, challengeProgress } from '../data/challenges.js?v=1791283426';
 
 const diffLabel = { easy: '쉬움', normal: '보통', hard: '어려움' };
 
@@ -33,6 +33,12 @@ const HERO_FACE = {
   '네스토르': 'hero-nestor',
 };
 export const heroFaceSrc = (name) => HERO_FACE[name] ? `${ASSET}/heroes/${HERO_FACE[name]}.webp` : null;
+// 플레이어("나") 아바타: -1 = 랜덤(게임마다), 0~3 = 고정
+export const playerAvatarSrc = (idx) => `${ASSET}/heroes/player-${(idx % 4) + 1}.webp`;
+export const resolvePlayerAvatar = (options, seed = 0) => {
+  const pick = options?.playerAvatar ?? -1;
+  return playerAvatarSrc(pick === -1 ? seed % 4 : pick);
+};
 // 승급전 보스 여부 (게임 화면에서 BOSS 태그·금테두리용)
 export const bossOf = (ctrl, p) => !!(ctrl?.promotion && ctrl.promotion.boss === p?.name);
 // Escape user-supplied text (multiplayer names). Card data is trusted; names are not.
@@ -189,8 +195,9 @@ export function meHTML(ctrl) {
   const me = ctrl.me;
   const b = getBonuses(me);
   const tc = tokenCount(me);
+  const av = ctrl.playerAvatar ? `<img class="tface" src="${ctrl.playerAvatar}" alt="">` : '';
   return `<div class="row1">
-      <div class="who">${me.name}<span class="sc">${getPoints(me)}점</span></div>
+      <div class="who">${av}${me.name}<span class="sc">${getPoints(me)}점</span></div>
       <div class="tkcount ${tc >= 10 ? 'full' : ''}">가호 ${tc}/10</div>
       <div class="evcount">신격화 ${me.evolved.length}회</div>
     </div>
@@ -563,6 +570,10 @@ export function tutorialHTML(tut) {
 }
 
 export function optionsHTML(options) {
+  const av = options.playerAvatar ?? -1;
+  const avBtns = [-1, 0, 1, 2, 3].map((i) =>
+    `<button class="avbtn ${av === i ? 'sel' : ''}" data-action="avatar" data-v="${i}">${i === -1 ? '🎲' : `<img src="${playerAvatarSrc(i)}" alt="아바타 ${i + 1}">`}</button>`
+  ).join('');
   return `<div class="overlay"><div class="panel">
     <div class="title big">설정</div>
     <button class="optrow" data-action="toggle-help">
@@ -570,6 +581,9 @@ export function optionsHTML(options) {
       <span class="toggle ${options.beginnerHelp ? 'on' : ''}">${options.beginnerHelp ? '켬' : '끔'}</span>
     </button>
     <p class="sheet-p">게임 중 상황에 맞는 도움말을 보여줘요.</p>
+    <div class="difflabel">내 아바타</div>
+    <div class="avrow">${avBtns}</div>
+    <p class="sheet-p">일반전에서 "나"의 모습이에요. 🎲는 매 게임 랜덤.</p>
     <div class="btnrow"><button class="btn ghost" data-action="restart">타이틀로 돌아가기</button></div>
     <div class="btnrow"><button class="btn primary" data-action="options-close">닫기</button></div>
   </div></div>`;
@@ -623,7 +637,10 @@ export function endHTML(ctrl) {
   const s = ctrl.state;
   const rows = s.ranking.map((r) => {
     const p = s.players[r.player];
-    return `<tr class="${r.rank === 1 ? 'win' : ''} ${p.id === ctrl.human ? 'me' : ''}"><td>${r.rank}</td><td>${p.isAI ? 'AI ' : ''}${p.name}</td><td>${r.points}점</td><td>신격화 ${r.evolutions}</td><td>${r.pokemon}장</td></tr>`;
+    const face = p.id === ctrl.human && ctrl.playerAvatar
+      ? `<img class="tface mini" src="${ctrl.playerAvatar}" alt="">`
+      : (heroFaceSrc(p.name) ? `<img class="tface mini" src="${heroFaceSrc(p.name)}" alt="">` : '');
+    return `<tr class="${r.rank === 1 ? 'win' : ''} ${p.id === ctrl.human ? 'me' : ''}"><td>${r.rank}</td><td>${face}${p.isAI ? 'AI ' : ''}${p.name}</td><td>${r.points}점</td><td>신격화 ${r.evolutions}</td><td>${r.pokemon}장</td></tr>`;
   }).join('');
   const top = s.ranking[0].player === ctrl.human;
   const scoreLine = ctrl.lastScore != null
@@ -662,8 +679,9 @@ export function endHTML(ctrl) {
 export function achvHTML(unlocked) {
   const rows = ACHIEVEMENTS.map((a) => {
     const got = !!unlocked[a.id];
+    const league = a.mode === 'league' ? '<span class="achvleague">🏆 리그</span>' : '';
     return `<div class="achvrow ${got ? 'got' : ''}"><span class="achvicon">${got ? a.icon : '🔒'}</span>
-      <div><b>${a.name}</b><br><small>${a.desc}</small></div></div>`;
+      <div><b>${a.name}</b>${league}<br><small>${a.desc}</small></div></div>`;
   }).join('');
   const n = Object.keys(unlocked).length;
   return `<div class="overlay"><div class="panel">

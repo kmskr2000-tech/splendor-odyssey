@@ -103,7 +103,7 @@ export function loadSave(storage, cards) {
 // ---------- Options ----------
 // { v:1, beginnerHelp: bool }
 
-const defaultOptions = () => ({ v: 1, beginnerHelp: true, difficulty: 'normal', personality: 'random', playerName: '' });
+const defaultOptions = () => ({ v: 1, beginnerHelp: true, difficulty: 'normal', personality: 'random', playerName: '', playerAvatar: -1 });
 
 const DIFFS = new Set(['easy', 'normal', 'hard', 'veryhard']);
 const PERSS = new Set(['random', 'specialized', 'opportunistic', 'balanced']);
@@ -111,22 +111,26 @@ const PERSS = new Set(['random', 'specialized', 'opportunistic', 'balanced']);
 export function loadOptions(storage) {
   const o = readJSON(storage, OPTS_KEY);
   if (!isObj(o)) return defaultOptions();
+  const av = Number.isInteger(o.playerAvatar) && o.playerAvatar >= -1 && o.playerAvatar < 4 ? o.playerAvatar : -1;
   return {
     v: 1,
     beginnerHelp: o.beginnerHelp !== false,
     difficulty: DIFFS.has(o.difficulty) ? o.difficulty : 'normal',
     personality: PERSS.has(o.personality) ? o.personality : 'random',
     playerName: typeof o.playerName === 'string' ? o.playerName.slice(0, 12) : '',
+    playerAvatar: av, // -1 = 랜덤, 0~3 = 고정
   };
 }
 
 export function saveOptions(storage, opts) {
+  const av = Number.isInteger(opts.playerAvatar) && opts.playerAvatar >= -1 && opts.playerAvatar < 4 ? opts.playerAvatar : -1;
   writeJSON(storage, OPTS_KEY, {
     v: 1,
     beginnerHelp: !!opts.beginnerHelp,
     difficulty: DIFFS.has(opts.difficulty) ? opts.difficulty : 'normal',
     personality: PERSS.has(opts.personality) ? opts.personality : 'random',
     playerName: typeof opts.playerName === 'string' ? opts.playerName.slice(0, 12) : '',
+    playerAvatar: av,
   });
 }
 

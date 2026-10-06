@@ -13,17 +13,18 @@ try {
   }
 } catch (e) { /* 버전 확인 실패 시 조용히 진행 */ }
 
-import { CARDS } from '../data/cards.js?v=1791282997';
-import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791282997';
-import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791282997';
-import { createController } from './controller.js?v=1791282997';
-import * as V from './view.js?v=1791282997';
-import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791282997';
-import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal, loadHero, getHero, loadLeague, pendingPromotion } from '../storage/store.js?v=1791282997';
-import { TIERS, tierFor, tierProgressText, tierById, currentSeason, todayStr } from '../data/league.js?v=1791282997';
-import { dailyChallenge, weeklyChallenge } from '../data/daily.js?v=1791282997';
-import { settleMeta } from '../meta/settle.js?v=1791282997';
-import { NetSession } from '../net/session.js?v=1791282997';
+import { CARDS } from '../data/cards.js?v=1791283426';
+import { ALL_OPPONENTS } from '../data/heroes.js?v=1791283426';
+import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791283426';
+import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791283426';
+import { createController } from './controller.js?v=1791283426';
+import * as V from './view.js?v=1791283426';
+import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791283426';
+import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal, loadHero, getHero, loadLeague, pendingPromotion } from '../storage/store.js?v=1791283426';
+import { TIERS, tierFor, tierProgressText, tierById, currentSeason, todayStr } from '../data/league.js?v=1791283426';
+import { dailyChallenge, weeklyChallenge } from '../data/daily.js?v=1791283426';
+import { settleMeta } from '../meta/settle.js?v=1791283426';
+import { NetSession } from '../net/session.js?v=1791283426';
 
 // In-app browser guard: KakaoTalk/etc. popups die when swiped away, killing
 // multiplayer. iOS can't force-open Safari from JS, so detect and guide.
@@ -228,6 +229,17 @@ const cardsById = new Map(CARDS.map((c) => [c.id, c]));
 let caughtLegend = false; // this game's legend catch flag (for achievements)
 let achvToasts = []; // newly unlocked achievements waiting to toast
 let achvToastTimer = null;
+let infoToastTimer = null;
+
+// 일반 정보 토스트 (업적 토스트와 같은 영역 사용)
+function showInfoToast(html, ms = 4000) {
+  const el = document.getElementById('achvtoast');
+  if (!el) return;
+  el.innerHTML = `<div class="achvtoast-in">${html}</div>`;
+  el.style.display = 'block';
+  clearTimeout(infoToastTimer);
+  infoToastTimer = setTimeout(() => { el.style.display = 'none'; el.innerHTML = ''; }, ms);
+}
 
 // ---------- meta view helpers (single-player) ----------
 
@@ -300,6 +312,11 @@ const hooks = {
         points: getPoints(me),
         bonusColors,
         caughtLegend,
+        leagueMode: ctrl.leagueMode,
+        promotionMatch: !!ctrl.promotion,
+        rank,
+        bossBeaten: (won && rank === 1 && ctrl.promotion) ? ctrl.promotion.boss : null,
+        promotedTo: (won && rank === 1 && ctrl.promotion) ? ctrl.promotion.to : null,
       };
       const newly = checkAchievements(ctx, loadAchv(storage).unlocked);
       if (newly.length) {
@@ -307,18 +324,21 @@ const hooks = {
         queueAchvToasts(newly);
       }
       // 메타 정산: 싱글모드(챌린지·튜토리얼 제외)에서만. 멀티는 완전 바닐라.
-      const isHeroGame = !ctrl.mp && !ctrl.challenge && AI_NAMES.includes(ctrl.humanName);
-      if (isHeroGame) {
+      // - XP: 리그전에서 실제 영웅으로 플레이할 때만 (일반전 "나"는 제외)
+      // - 리그: leagueMode일 때만 / 업적·도전·기록: 양쪽 모드 공통
+      const isSingleGame = !ctrl.mp && !ctrl.challenge;
+      if (isSingleGame) {
         ctrl.metaResult = settleMeta(storage, {
           won, rank, points: ctx.points, turns: ctrl.humanTurns,
           difficulty: ctrl.difficulty, aiDifficulty: ctrl.aiDifficulty,
-          heroName: ctrl.humanName, leagueMode: ctrl.leagueMode,
+          heroName: ctrl.leagueMode ? ctrl.humanName : null,
+          leagueMode: ctrl.leagueMode,
           evolved: me.evolved.length, track: ctrl.track,
           dateStr: todayStr(), season: currentSeason(),
           promotionMatch: !!ctrl.promotion, promotionTo: ctrl.promotion?.to ?? null,
         });
       }
-      const rec = recordResult(storage, { won, points: ctx.points, turns: ctx.turns, difficulty: ctx.difficulty, hero: isHeroGame ? ctrl.humanName : undefined });
+      const rec = recordResult(storage, { won, points: ctx.points, turns: ctx.turns, difficulty: ctx.difficulty, hero: isSingleGame && ctrl.leagueMode ? ctrl.humanName : undefined });
       ctrl.lastScore = rec.score;
       ctrl.lastBest = rec.isBest;
     }
@@ -404,15 +424,27 @@ function startGame(humanName) {
       tier = { ...tier, roster: picked };
     }
   } else {
-    // 일반전: 나머지 3영웅
-    aiNames = AI_NAMES.filter((n) => n !== humanName).slice(0, 3);
+    // 일반전: 전체 27 캐릭터 풀에서 랜덤 3명 (보스도 등장 가능, BOSS 태그 없이)
+    const pool = [...ALL_OPPONENTS];
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    aiNames = pool.slice(0, 3);
   }
   clearSave(storage); // a new game replaces any saved one
   ctrl = createController({ cards: CARDS, seed, humanName, aiNames, hooks, difficulty: rewardDiff, leagueTier: tier, promotion });
+  // 일반전 "나"의 아바타 (옵션 고정 또는 seed 기반 랜덤)
+  if (humanName === '나') ctrl.playerAvatar = V.resolvePlayerAvatar(options, seed);
   saveGame(storage, ctrl.snapshot());
   Object.keys(cache).forEach((k) => delete cache[k]);
   window.__ctrl = ctrl; // debugging / automated tests
   render();
+  // 일반전 "나": 이번 판의 랜덤 능력 안내
+  if (!league && humanName === '나' && ctrl.me?.ability) {
+    const names = { refreshRow: '기책', takeFour: '괴력', masterBonus: '전리품', discount: '여신의 가호' };
+    showInfoToast(`<span class="achvicon">✨</span><div><b>이번 판의 능력: ${names[ctrl.me.ability] ?? '능력'}</b><br>게임당 1회 사용할 수 있어요</div>`);
+  }
 }
 
 // 시드 기반 셔플 후 n개 선택 (테스트 결정성 유지)
@@ -449,9 +481,8 @@ document.addEventListener('click', (e) => {
     case 'intro-tap': introDone = true; break;
     case 'mode-single': {
       singleMode = 'normal'; modeDone = true;
-      // 일반전: 영웅 선택 없이 랜덤 영웅으로 바로 시작
-      const hero = AI_NAMES[Math.floor(Math.random() * AI_NAMES.length)];
-      startGame(hero); return;
+      // 일반전: "나"로 즉시 시작 (영웅 선택 스킵, 능력은 랜덤)
+      startGame('나'); return;
     }
     case 'mode-league': singleMode = 'league'; modeDone = true; break;
     case 'mode-back': modeDone = false; break;
@@ -475,6 +506,11 @@ document.addEventListener('click', (e) => {
       options.beginnerHelp = !options.beginnerHelp;
       saveOptions(storage, options);
       break;
+    case 'avatar': {
+      const v = parseInt(d.v, 10);
+      if (v >= -1 && v < 4) { options.playerAvatar = v; saveOptions(storage, options); }
+      break;
+    }
     case 'difficulty':
       if (['easy', 'normal', 'hard', 'veryhard'].includes(d.v)) {
         options.difficulty = d.v;

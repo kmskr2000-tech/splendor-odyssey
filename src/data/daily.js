@@ -1,7 +1,7 @@
 // 일일/주간 도전: 날짜 시드 기반 결정적 생성 (같은 날 모두 같은 도전).
 // 싱글모드에서만 정산 (멀티플레이어는 바닐라).
 
-import { mondayOf } from './league.js?v=1791282997';
+import { mondayOf } from './league.js?v=1791283426';
 
 const GAHO = [
   { key: 'monster', name: '천둥' },

@@ -5,10 +5,10 @@
 import {
   COLORS, MASTER, PHASES, MAX_HAND,
   createGame, applyAction, legalActions, computePayment, evolveOptions, getCurrentPlayer, tokenCount,
-} from '../core/index.js?v=1791282997';
-import { chooseAction } from '../ai/heuristic.js?v=1791282997';
-import { abilityOf, abilityInfo, PLAYABLE_HEROES } from '../data/heroes.js?v=1791282997';
-import { TIERS, effectiveDifficulty } from '../data/league.js?v=1791282997';
+} from '../core/index.js?v=1791283426';
+import { chooseAction } from '../ai/heuristic.js?v=1791283426';
+import { abilityOf, abilityInfo, PLAYABLE_HEROES, isBoss, personalityOf, ABILITY_IDS } from '../data/heroes.js?v=1791283426';
+import { TIERS, effectiveDifficulty } from '../data/league.js?v=1791283426';
 
 export const BALLS = {
   monster: { file: 'ball-thunder', ext: 'webp', name: '천둥의 가호', short: '천둥' },
@@ -39,19 +39,6 @@ const ERROR_TEXT = {
 
 export const errorText = (code) => ERROR_TEXT[code] ?? `실행할 수 없어요 (${code})`;
 
-// Shuffles the 3 AI personalities and deals one per player seat (index 0 = human,
-// unused). Stable per game via the game seed; restored from save on resume.
-function secretPersonalities(seed, playerCount) {
-  const arr = ['specialized', 'opportunistic', 'balanced'];
-  let s = (seed >>> 0) || 1;
-  const rnd = () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296;
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return Array.from({ length: playerCount }, (_, i) => arr[i % arr.length]);
-}
-
 // 유효 AI 난이도 = clamp(티어 베이스 + 플레이어 보정). 승급전은 보스 고정 강도.
 function effectiveAiDifficulty({ leagueTier, difficulty, promotion }) {
   if (promotion) return 'hard';
@@ -73,12 +60,14 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
     ...((mp.aiNames || []).map((name) => ({ name, isAI: true }))),
   ] : null;
   const playerCount = mpPlayers ? mpPlayers.length : 1 + aiNames.length;
-  // 영웅 능력: 싱글모드 전용 (멀티는 완전 바닐라). 플레이어는 항상, AI는 보스만 사용.
-  const bossName = promotion?.boss ?? null;
+  // 영웅 능력: 싱글모드 전용 (멀티는 완전 바닐라).
+  // - 플레이어: 영웅 선택 시 고유 능력, "나"는 4종 중 랜덤 (seed 기반)
+  // - AI: 보스만 사용
+  const randAbility = ABILITY_IDS[seed % ABILITY_IDS.length];
   const abilityFor = (name, isAI) => {
     if (mp) return null;
-    if (!isAI) return abilityOf(name);
-    return name === bossName ? abilityOf(name) : null;
+    if (!isAI) return name === '나' ? randAbility : abilityOf(name);
+    return isBoss(name) ? abilityOf(name) : null;
   };
   const game = resume?.game ?? createGame({
     cards,
@@ -121,10 +110,10 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
     // 영웅 능력 armed 상태 (UI가 켜고 끔)
     abilityArmed: null,
     // Secret AI personalities: shuffled per game, hidden from the player.
-    // 리그전은 티어 로스터의 고정 성격 사용.
+    // 리그전은 티어 로스터의 고정 성격, 일반전은 27 캐릭터 풀의 고정 성격 사용.
     aiPersonalities: resume?.aiPersonalities ?? (leagueTier
       ? Array.from({ length: playerCount }, (_, i) => (i === 0 ? 'balanced' : leagueTier.roster[i - 1].personality))
-      : secretPersonalities(seed, playerCount)),
+      : ['balanced', ...aiNames.map(personalityOf)]),
     errors: 0, // failed applyAction calls (tests assert 0 for UI-generated actions)
 
     get state() { return this.game; },

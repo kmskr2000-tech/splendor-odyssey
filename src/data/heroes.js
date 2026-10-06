@@ -60,3 +60,30 @@ export function isBoss(name) {
 
 // 플레이어블 4영웅 (인기 많은 신화 인물)
 export const PLAYABLE_HEROES = ['오디세우스', '헤라클레스', '아킬레우스', '페르세우스'];
+
+// 일반전 상대 풀: 전체 27 캐릭터 (플레이어블 4 + 보스 5 + 로스터 18)
+export const ALL_OPPONENTS = Object.keys(HERO_ABILITIES);
+
+// 캐릭터별 고정 성격 (일반전에서도 사용)
+export const CHARACTER_PERSONALITY = {
+  // 플레이어블 4
+  '오디세우스': 'balanced', '헤라클레스': 'opportunistic',
+  '아킬레우스': 'specialized', '페르세우스': 'balanced',
+  // 보스 5
+  '미노타우로스': 'opportunistic', '메두사': 'specialized', '히드라': 'balanced',
+  '아가멤논': 'opportunistic', '제우스': 'balanced',
+  // 로스터 18 (리그 티어 순서)
+  '이카로스': 'balanced', '오르페우스': 'specialized', '시지프스': 'opportunistic', '다이달로스': 'specialized',
+  '파트로클로스': 'balanced', '스파르타 전사': 'opportunistic', '아마존 여전사': 'specialized',
+  '네스토르': 'balanced', '이아손': 'opportunistic', '테세우스': 'specialized',
+  '헥토르': 'balanced', '아이아스': 'opportunistic', '메넬라오스': 'specialized',
+  '벨레로폰': 'specialized', '오리온': 'opportunistic', '카스토르': 'balanced',
+  '아테나': 'specialized', '아레스': 'opportunistic',
+};
+
+export function personalityOf(name) {
+  return CHARACTER_PERSONALITY[name] ?? 'balanced';
+}
+
+// 능력 id 4종 (일반전 "나"의 랜덤 능력용)
+export const ABILITY_IDS = ['refreshRow', 'takeFour', 'masterBonus', 'discount'];
