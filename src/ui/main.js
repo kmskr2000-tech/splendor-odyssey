@@ -1,12 +1,25 @@
 // DOM glue: renders controller state into regions, wires taps, and paces AI turns.
 
-import { CARDS } from '../data/cards.js?v=1791269395';
-import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791269395';
-import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791269395';
-import { createController } from './controller.js?v=1791269395';
-import * as V from './view.js?v=1791269395';
-import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791269395';
-import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal } from '../storage/store.js?v=1791269395';
+// 자가업데이트 (iOS 홈화면 웹앱 캐시 대책): 배포된 version.json과 window.__V가
+// 다르면 ?v= 를 붙여 리로드한다. param 값 비교로 무한루프 방지.
+try {
+  const __v = await fetch('assets/version.json', { cache: 'no-store', signal: AbortSignal.timeout(5000) })
+    .then(r => r.json()).then(j => String(j.v));
+  const __qv = new URLSearchParams(location.search).get('v');
+  if (__v && __v !== 'undefined' && __v !== String(window.__V) && __qv !== __v) {
+    const __u = new URL(location.href);
+    __u.searchParams.set('v', __v);
+    location.replace(__u.toString());
+  }
+} catch (e) { /* 버전 확인 실패 시 조용히 진행 */ }
+
+import { CARDS } from '../data/cards.js?v=1791269551';
+import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791269551';
+import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791269551';
+import { createController } from './controller.js?v=1791269551';
+import * as V from './view.js?v=1791269551';
+import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791269551';
+import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal } from '../storage/store.js?v=1791269551';
 
 const params = new URLSearchParams(location.search);
 const AI_DELAY = params.has('fast') ? 0 : 1600; // ?fast=1 skips the pacing delay (tests)
