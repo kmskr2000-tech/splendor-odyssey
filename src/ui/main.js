@@ -13,14 +13,17 @@ try {
   }
 } catch (e) { /* 버전 확인 실패 시 조용히 진행 */ }
 
-import { CARDS } from '../data/cards.js?v=1791279718';
-import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791279718';
-import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791279718';
-import { createController } from './controller.js?v=1791279718';
-import * as V from './view.js?v=1791279718';
-import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791279718';
-import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal } from '../storage/store.js?v=1791279718';
-import { NetSession } from '../net/session.js?v=1791279718';
+import { CARDS } from '../data/cards.js?v=1791281681';
+import { ACHIEVEMENTS, checkAchievements } from '../data/achievements.js?v=1791281681';
+import { CHALLENGES, challengeWon } from '../data/challenges.js?v=1791281681';
+import { createController } from './controller.js?v=1791281681';
+import * as V from './view.js?v=1791281681';
+import { getBonuses, getPoints, bonusList } from '../core/engine.js?v=1791281681';
+import { browserStorage, loadDex, loadSave, saveGame, clearSave, recordCatch, recordGame, loadOptions, saveOptions, loadAchv, unlockAchv, loadRecords, recordResult, victoryScore, loadChal, completeChal, loadHero, getHero, loadLeague } from '../storage/store.js?v=1791281681';
+import { TIERS, tierFor, tierProgressText, tierById, currentSeason, todayStr } from '../data/league.js?v=1791281681';
+import { dailyChallenge, weeklyChallenge } from '../data/daily.js?v=1791281681';
+import { settleMeta } from '../meta/settle.js?v=1791281681';
+import { NetSession } from '../net/session.js?v=1791281681';
 
 // In-app browser guard: KakaoTalk/etc. popups die when swiped away, killing
 // multiplayer. iOS can't force-open Safari from JS, so detect and guide.
@@ -80,6 +83,7 @@ let netNotice = ''; // one-shot notice shown on the start/net screen
 let netHelpOpen = false;
 let introDone = false; // intro splash shown once per page load
 let modeDone = false; // mode select (single vs multiplayer) shown after intro
+let singleMode = 'normal'; // 'league' | 'normal' — 싱글 세부 모드
 const storage = browserStorage();
 const options = loadOptions(storage);
 
@@ -98,7 +102,8 @@ function render() {
   if (!introDone) {
     overlay = V.introHTML();
   } else if (!modeDone && !ctrl) {
-    overlay = V.modeHTML();
+    const dv = dailyView();
+    overlay = V.modeHTML({ league: leagueView(), daily: dv.daily, weekly: dv.weekly, chalDone: dv.done, streak: dv.streak });
   } else if (netHelpOpen && net) {
     overlay = V.netHelpHTML();
   } else if (net && !ctrl) {
@@ -108,7 +113,11 @@ function render() {
     overlay = V.rejoinWaitHTML(net);
     netNotice = '';
   } else {
-    overlay = !ctrl ? V.startHTML({ save: loadSave(storage, CARDS), dex: loadDex(storage), cards: CARDS, options, notice: netNotice }) : ctrl.finished ? V.endHTML(ctrl) : '';
+    const lv = singleMode === 'league' ? leagueView() : null;
+    overlay = !ctrl ? V.startHTML({
+      save: loadSave(storage, CARDS), dex: loadDex(storage), cards: CARDS, options, notice: netNotice,
+      heroes: heroesView(), leagueMode: singleMode === 'league', tier: lv?.tier ?? null,
+    }) : ctrl.finished ? V.endHTML(ctrl) : '';
     netNotice = '';
   }
   if (ctrl?.challengeDone) overlay = V.challengeEndHTML(ctrl.challengeDone === 'won', ctrl.challenge);
@@ -205,9 +214,9 @@ function animateAIFromSnap(snap) {
   if (!ev) return;
   const dst = document.querySelector(`.opp[data-id="${ev.player}"]`);
   if (!dst) return;
-  if (ev.type === 'buy' || ev.type === 'reserve') {
+  if (ev.type === 'buy' || ev.type === 'abilityBuy' || ev.type === 'reserve') {
     flyClone(snap.get('card:' + ev.cardId), dst);
-  } else if (ev.type === 'takeBalls') {
+  } else if (ev.type === 'takeBalls' || ev.type === 'abilityTake') {
     flyBalls(snap, ev.colors, dst);
   } else if (ev.type === 'takeTwo') {
     flyBalls(snap, [ev.color, ev.color], dst);
@@ -218,6 +227,38 @@ const cardsById = new Map(CARDS.map((c) => [c.id, c]));
 let caughtLegend = false; // this game's legend catch flag (for achievements)
 let achvToasts = []; // newly unlocked achievements waiting to toast
 let achvToastTimer = null;
+
+// ---------- meta view helpers (single-player) ----------
+
+function leagueView() {
+  const season = currentSeason();
+  const l = loadLeague(storage, season);
+  const tier = tierFor(l.points);
+  return {
+    points: l.points,
+    tier,
+    progressText: tierProgressText(l.points),
+    rolled: l.rolled ? { ...l.rolled, tierName: tierById(l.rolled.tier).name } : null,
+  };
+}
+
+function heroesView() {
+  const out = {};
+  for (const name of AI_NAMES) out[name] = getHero(storage, name);
+  return out;
+}
+
+function dailyView() {
+  const dateStr = todayStr();
+  const chal = loadChal(storage);
+  return {
+    daily: dailyChallenge(dateStr),
+    weekly: weeklyChallenge(dateStr),
+    done: chal.completed,
+    streak: chal.streak.count,
+    dateStr,
+  };
+}
 
 function queueAchvToasts(list) {
   achvToasts = achvToasts.concat(list);
@@ -247,6 +288,7 @@ const hooks = {
       const me = ctrl.me;
       const bonusColors = new Set();
       for (const card of me.tableau) for (const b of bonusList(card)) bonusColors.add(b);
+      const rank = ctrl.game.ranking.find((r) => r.player === ctrl.human)?.rank ?? 4;
       const ctx = {
         won,
         turns: ctrl.game.turn,
@@ -261,7 +303,18 @@ const hooks = {
         unlockAchv(storage, newly.map((a) => a.id));
         queueAchvToasts(newly);
       }
-      const rec = recordResult(storage, { won, points: ctx.points, turns: ctx.turns, difficulty: ctx.difficulty });
+      // 메타 정산: 싱글모드(챌린지·튜토리얼 제외)에서만. 멀티는 완전 바닐라.
+      const isHeroGame = !ctrl.mp && !ctrl.challenge && AI_NAMES.includes(ctrl.humanName);
+      if (isHeroGame) {
+        ctrl.metaResult = settleMeta(storage, {
+          won, rank, points: ctx.points, turns: ctrl.humanTurns,
+          difficulty: ctrl.difficulty, aiDifficulty: ctrl.aiDifficulty,
+          heroName: ctrl.humanName, leagueMode: ctrl.leagueMode,
+          evolved: me.evolved.length, track: ctrl.track,
+          dateStr: todayStr(), season: currentSeason(),
+        });
+      }
+      const rec = recordResult(storage, { won, points: ctx.points, turns: ctx.turns, difficulty: ctx.difficulty, hero: isHeroGame ? ctrl.humanName : undefined });
       ctrl.lastScore = rec.score;
       ctrl.lastBest = rec.isBest;
     }
@@ -273,7 +326,7 @@ const hooks = {
 function resumeGame() {
   const save = loadSave(storage, CARDS);
   if (!save) return;
-  ctrl = createController({ cards: CARDS, seed: save.seed, humanName: save.humanName, aiNames: save.aiNames, resume: { game: save.game, log: save.log, difficulty: save.difficulty, aiPersonalities: save.aiPersonalities }, hooks });
+  ctrl = createController({ cards: CARDS, seed: save.seed, humanName: save.humanName, aiNames: save.aiNames, resume: { game: save.game, log: save.log, difficulty: save.difficulty, aiDifficulty: save.aiDifficulty, leagueMode: save.leagueMode, aiPersonalities: save.aiPersonalities, track: save.track }, hooks });
   Object.keys(cache).forEach((k) => delete cache[k]);
   window.__ctrl = ctrl;
   render();
@@ -310,6 +363,7 @@ function savePlayerName(name) {
 const netInputVal = (id) => document.getElementById(id)?.value ?? '';
 
 function startTutorial() {
+  singleMode = 'normal';
   startGame('나');
   tutorial = { step: 0 };
   render();
@@ -325,9 +379,12 @@ function tutAdvance() {
 function startGame(humanName) {
   const seedParam = params.get('seed');
   const seed = seedParam !== null ? Number(seedParam) : (crypto.getRandomValues(new Uint32Array(1))[0] || 1);
-  const aiNames = AI_NAMES.filter((n) => n !== humanName).slice(0, 3);
+  const league = singleMode === 'league';
+  const tier = league ? tierFor(leagueView().points) : null;
+  // 리그전: 티어 로스터 3명과 대결 (고정 성격·티어 난이도). 일반전: 나머지 3영웅.
+  const aiNames = league ? tier.roster.map((r) => r.name) : AI_NAMES.filter((n) => n !== humanName).slice(0, 3);
   clearSave(storage); // a new game replaces any saved one
-  ctrl = createController({ cards: CARDS, seed, humanName, aiNames, hooks, difficulty: options.difficulty });
+  ctrl = createController({ cards: CARDS, seed, humanName, aiNames, hooks, difficulty: options.difficulty, leagueTier: tier });
   saveGame(storage, ctrl.snapshot());
   Object.keys(cache).forEach((k) => delete cache[k]);
   window.__ctrl = ctrl; // debugging / automated tests
@@ -354,7 +411,8 @@ document.addEventListener('click', (e) => {
   const d = el.dataset;
   switch (d.action) {
     case 'intro-tap': introDone = true; break;
-    case 'mode-single': modeDone = true; break;
+    case 'mode-single': singleMode = 'normal'; modeDone = true; break;
+    case 'mode-league': singleMode = 'league'; modeDone = true; break;
     case 'mode-back': modeDone = false; break;
     case 'mode-net': modeDone = true; openNet(); return;
     case 'start': startGame(d.name); return;
@@ -462,6 +520,9 @@ document.addEventListener('click', (e) => {
     case 'evolve': ctrl.evolve(d.card); break;
     case 'skip-evolve': ctrl.skipEvolve(); break;
     case 'pass': ctrl.pass(); break;
+    case 'ability': ctrl.armAbility(); break;
+    case 'ability-cancel': ctrl.disarmAbility(); break;
+    case 'ability-refresh': ctrl.abilityRefresh(d.tier); break;
     default: return;
   }
   render();

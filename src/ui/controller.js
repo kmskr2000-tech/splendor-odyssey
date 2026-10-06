@@ -5,8 +5,10 @@
 import {
   COLORS, MASTER, PHASES, MAX_HAND,
   createGame, applyAction, legalActions, computePayment, evolveOptions, getCurrentPlayer, tokenCount,
-} from '../core/index.js?v=1791279718';
-import { chooseAction } from '../ai/heuristic.js?v=1791279718';
+} from '../core/index.js?v=1791281681';
+import { chooseAction } from '../ai/heuristic.js?v=1791281681';
+import { abilityOf } from '../data/heroes.js?v=1791281681';
+import { TIERS } from '../data/league.js?v=1791281681';
 
 export const BALLS = {
   monster: { file: 'ball-thunder', ext: 'webp', name: '천둥의 가호', short: '천둥' },
@@ -53,7 +55,8 @@ function secretPersonalities(seed, playerCount) {
 // `resume` ({ game, log }) restores a saved game instead of dealing a new one.
 // `hooks.onCatch(cardId, kind)` fires for the human's captures/evolutions, `hooks.onChange()` after
 // every accepted action, `hooks.onEnd(won)` once when the game finishes (persistence lives outside).
-export function createController({ cards, seed, humanName = '나', aiNames = ['다이달로스', '아가멤논', '파트로클로스'], resume = null, hooks = {}, difficulty = 'normal', challenge = null, mp = null }) {
+// leagueTier: 올림포스 리그전 티어 객체 (AI 로스터·성격·난이도 적용). 멀티플레이어에서는 절대 사용하지 않음.
+export function createController({ cards, seed, humanName = '나', aiNames = ['다이달로스', '아가멤논', '파트로클로스'], resume = null, hooks = {}, difficulty = 'normal', challenge = null, mp = null, leagueTier = null }) {
   const cardsById = new Map(cards.map((c) => [c.id, c]));
   // mp: { names: [...humanNames], me: index, aiNames: [...] } — multiplayer.
   // Humans first, then AI seats (acted by the host, relayed to guests).
@@ -62,11 +65,16 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
     ...((mp.aiNames || []).map((name) => ({ name, isAI: true }))),
   ] : null;
   const playerCount = mpPlayers ? mpPlayers.length : 1 + aiNames.length;
+  // 영웅 능력: 싱글모드 전용 (멀티는 완전 바닐라)
+  const abilityFor = (name) => (mp ? null : abilityOf(name));
   const game = resume?.game ?? createGame({
     cards,
     seed,
-    players: mpPlayers ?? [{ name: humanName, isAI: false }, ...aiNames.map((name) => ({ name, isAI: true }))],
+    players: mpPlayers ?? [{ name: humanName, isAI: false, ability: abilityFor(humanName) }, ...aiNames.map((name) => ({ name, isAI: true, ability: abilityFor(name) }))],
   });
+  // 구버전 세이브 마이그레이션 (abilityUsed/ability 필드 없음)
+  if (!Array.isArray(game.abilityUsed)) game.abilityUsed = game.players.map(() => false);
+  for (const p of game.players) if (!('ability' in p)) p.ability = null;
   // createGame only copies whitelisted fields; re-attach the remote flag for mp humans.
   if (mp) game.players.forEach((p, i) => { p.remote = !p.isAI && i !== mp.me; });
 
@@ -85,11 +93,21 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
     humanName,
     aiNames,
     difficulty: resume?.difficulty ?? difficulty,
+    // 리그전: AI 난이도는 티어가 정함 (플레이어 선택 난이도는 보상 배율에만 사용)
+    aiDifficulty: resume?.aiDifficulty ?? (leagueTier ? leagueTier.ai : (resume?.difficulty ?? difficulty)),
+    leagueMode: resume?.leagueMode ?? !!leagueTier,
     challenge: resume?.challenge ?? challenge,
     challengeDone: null, // 'won' | 'lost' once the challenge resolves
     humanTurns: 0, // completed turns by the human (for challenge limits)
+    // 일일/주간 도전 집계용 (인간 행동만)
+    track: resume?.track ?? { reserve: 0, take: {} },
+    // 영웅 능력 armed 상태 (UI가 켜고 끔)
+    abilityArmed: null,
     // Secret AI personalities: shuffled per game, hidden from the player.
-    aiPersonalities: resume?.aiPersonalities ?? secretPersonalities(seed, playerCount),
+    // 리그전은 티어 로스터의 고정 성격 사용.
+    aiPersonalities: resume?.aiPersonalities ?? (leagueTier
+      ? Array.from({ length: playerCount }, (_, i) => (i === 0 ? 'balanced' : leagueTier.roster[i - 1].personality))
+      : secretPersonalities(seed, playerCount)),
     errors: 0, // failed applyAction calls (tests assert 0 for UI-generated actions)
 
     get state() { return this.game; },
@@ -105,6 +123,9 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
       const b = this.balls;
       if (b.length === 0) return null;
       if (b.length === 2 && b[0] === b[1]) return { type: 'takeTwo', color: b[0] };
+      if (this.abilityArmed === 'takeFour' && b.length === 4 && new Set(b).size === 4) {
+        return { type: 'abilityTake', colors: [...b] };
+      }
       return { type: 'takeBalls', colors: [...b] };
     },
     pendingValid() {
@@ -156,6 +177,43 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
       return 'table';
     },
 
+    // ---- hero abilities (single-player only) ----
+    canUseAbility() {
+      return !this.mp && this.isHumanTurn && this.game.phase === PHASES.ACTION
+        && !!this.me.ability && !this.game.abilityUsed[this.human];
+    },
+    abilityUsedUp() {
+      return !!this.game.abilityUsed[this.human];
+    },
+    armAbility() {
+      if (this.canUseAbility()) { this.abilityArmed = this.me.ability; this.sheet = null; this.message = ''; }
+    },
+    disarmAbility() {
+      this.abilityArmed = null;
+      this.message = '';
+    },
+    // 능력으로 영입 시 지불액 (다이달로스 할인 적용)
+    paymentAbility(cardId) {
+      const card = this.cardsById.get(cardId);
+      if (!card || this.abilityArmed !== 'discount') return null;
+      return computePayment(this.me, card, 1);
+    },
+    canBuyAbility(cardId) {
+      if (this.abilityArmed !== 'discount' && this.abilityArmed !== 'masterBonus') return false;
+      if (!this.isHumanTurn || this.game.phase !== PHASES.ACTION) return false;
+      const card = this.cardsById.get(cardId);
+      if (!card) return false;
+      return !!computePayment(this.me, card, this.abilityArmed === 'discount' ? 1 : 0);
+    },
+    abilityTakeFour() {
+      if (this.abilityArmed !== 'takeFour') return null;
+      return this.dispatch({ type: 'abilityTake', colors: [...this.balls] });
+    },
+    abilityRefresh(tier) {
+      if (this.abilityArmed !== 'refreshRow') return null;
+      return this.dispatch({ type: 'abilityRefresh', tier });
+    },
+
     // ---- selection ----
     toggleBall(color) {
       if (!this.isHumanTurn || this.game.phase !== PHASES.ACTION || color === MASTER) return;
@@ -175,7 +233,8 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
         return;
       }
       if (supply < 1) { this.message = errorText('supply_empty'); return; }
-      if (b.length >= 3) { this.message = errorText('bad_ball_count'); return; }
+      const maxBalls = this.abilityArmed === 'takeFour' ? 4 : 3;
+      if (b.length >= maxBalls) { this.message = errorText('bad_ball_count'); return; }
       this.balls = [...b, color];
     },
     clearSelection() {
@@ -236,10 +295,22 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
       this.discard = {};
       this.sheet = null;
       this.message = '';
+      this.abilityArmed = null; // 능력 armed는 어떤 행동 후에도 해제
+      // 일일/주간 도전 집계 (인간의 가호 획득·찜만 추적)
+      if (actor === this.human) {
+        for (const ev of res.events) {
+          if (ev.type === 'reserve') this.track.reserve += 1;
+          else if (ev.type === 'takeBalls' || ev.type === 'abilityTake') {
+            for (const c of ev.colors) this.track.take[c] = (this.track.take[c] || 0) + 1;
+          } else if (ev.type === 'takeTwo') {
+            this.track.take[ev.color] = (this.track.take[ev.color] || 0) + 2;
+          }
+        }
+      }
       for (const ev of res.events) {
         const line = describeEvent(ev, this);
         if (line) this.log.push(line);
-        if (ev.player !== this.human && ['takeBalls', 'takeTwo', 'buy', 'reserve', 'evolve'].includes(ev.type)) {
+        if (ev.player !== this.human && ['takeBalls', 'takeTwo', 'buy', 'reserve', 'evolve', 'abilityBuy', 'abilityTake', 'abilityRefresh'].includes(ev.type)) {
           this.lastAIEvent = ev;
         }
       }
@@ -254,7 +325,12 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
       return res;
     },
     confirmBalls() { const a = this.pendingAction(); return a ? this.dispatch(a) : null; },
-    buy(cardId) { return this.dispatch({ type: 'buy', cardId }); },
+    buy(cardId) {
+      if (this.abilityArmed === 'discount' || this.abilityArmed === 'masterBonus') {
+        return this.dispatch({ type: 'abilityBuy', cardId, ability: this.abilityArmed });
+      }
+      return this.dispatch({ type: 'buy', cardId });
+    },
     reserveCard(cardId) {
       const card = this.cardsById.get(cardId);
       return this.dispatch({ type: 'reserve', tier: Number(card.tier), source: 'table', cardId });
@@ -266,7 +342,7 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
     pass() { return this.dispatch({ type: 'pass' }); },
 
     snapshot() {
-      return { seed: this.seed, humanName: this.humanName, aiNames: this.aiNames, difficulty: this.difficulty, aiPersonalities: this.aiPersonalities, challenge: this.challenge, log: this.log, game: this.game };
+      return { seed: this.seed, humanName: this.humanName, aiNames: this.aiNames, difficulty: this.difficulty, aiDifficulty: this.aiDifficulty, leagueMode: this.leagueMode, aiPersonalities: this.aiPersonalities, challenge: this.challenge, log: this.log, track: this.track, game: this.game };
     },
 
     // Grants the challenge's starting tokens/tableau (puzzle setup).
@@ -284,7 +360,7 @@ export function createController({ cards, seed, humanName = '나', aiNames = ['�
     // One opponent action. Returns false when it is not an AI turn.
     stepAI(rnd) {
       if (this.finished || this.game.players[this.game.current].isAI !== true) return false;
-      this.dispatch(chooseAction(this.game, rnd, this.difficulty, this.aiPersonalities[this.game.current]));
+      this.dispatch(chooseAction(this.game, rnd, this.aiDifficulty, this.aiPersonalities[this.game.current]));
       return true;
     },
   };
@@ -308,8 +384,11 @@ export function describeEvent(ev, ctrl) {
   switch (ev.type) {
     case 'takeBalls': return `${who}: ${ev.colors.map((c) => BALLS[c].name).join('·')} 가져감`;
     case 'takeTwo': return `${who}: ${BALLS[ev.color].name} 2개 가져감`;
+    case 'abilityTake': return `${who}: 약탈! ${ev.colors.map((c) => BALLS[c].name).join('·')} 가져감`;
+    case 'abilityRefresh': return `${who}: 지혜! 카드 진열 새로고침`;
     case 'reserve': return `${who}: ${ev.source === 'deck' ? '덱 위 카드를' : `${name(ev.cardId)}을(를)`} 찜`;
     case 'buy': return `${who}: ${name(ev.cardId)} 영입!`;
+    case 'abilityBuy': return `${who}: ${name(ev.cardId)} 영입! (능력${ev.gotMaster ? ' +암브로시아' : ''})`;
     case 'discard': return `${who}: ${balls(ev.tokens)} 반환`;
     case 'evolve': return `${who}: ${name(ev.from)} → ${name(ev.to)} 신격화!`;
     case 'pass': return `${who}: 차례 넘김`;

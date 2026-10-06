@@ -496,3 +496,52 @@ button.orsv:hover { border-color: #4ade80; }
   font-size: 12px; color: #fef3c7; line-height: 1.8; text-align: center; margin-bottom: 8px;
 }
 .homage b { color: var(--gold); }
+
+/* ---------- meta systems (league / hero / daily / ability) ---------- */
+.leaguebadge {
+  display: flex; align-items: center; gap: 10px;
+  background: #1e1e30; border: 3px solid var(--tier, #8a6f4d);
+  padding: 10px 12px; margin: 8px 0; box-shadow: 3px 3px 0 var(--ink);
+}
+.leaguebadge.glow {
+  box-shadow: 0 0 12px var(--tier, #ffd700), 3px 3px 0 var(--ink);
+  border-color: var(--tier, #ffd700);
+}
+.tiericon { font-size: 28px; }
+.tierinfo { flex: 1; font-size: 13px; line-height: 1.6; }
+.tierinfo small { color: var(--muted); font-size: 11px; }
+.tierpts { font-size: 14px; color: var(--gold); white-space: nowrap; }
+.dailies { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.dailycard {
+  display: flex; gap: 10px; align-items: flex-start;
+  background: #20202f; border: 2px dashed #55556e; padding: 8px 10px; font-size: 12px; line-height: 1.7;
+}
+.dailycard.done { border-style: solid; border-color: #4ade80; }
+.dailycard .dico { font-size: 18px; }
+.dailycard .streak { color: #fb923c; }
+.lvbadge {
+  display: inline-block; font-size: 10px; background: #7c3aed; color: #fff;
+  padding: 2px 6px; margin-top: 6px; border: 2px solid var(--ink);
+}
+.xpbar {
+  display: block; height: 6px; background: #101018; border: 2px solid var(--ink);
+  margin: 4px 8px 0; overflow: hidden;
+}
+.xpbar > span { display: block; height: 100%; background: linear-gradient(90deg, #7c3aed, #fbbf24); }
+.tile .tname { display: block; }
+.abdesc { display: block; font-size: 9px; color: #c4b5fd; margin-top: 4px; line-height: 1.5; }
+.btn.ability {
+  background: #7c3aed; color: #fff; border: 3px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--ink); padding: 10px;
+}
+.btn.ability small { display: block; font-size: 10px; opacity: .85; margin-top: 4px; }
+.hint.abarmed { background: #2e1065; border: 2px solid #7c3aed; padding: 8px; font-size: 12px; }
+.statbox { background: #20202f; border: 2px solid #3a3a55; padding: 8px 10px; margin: 8px 0; font-size: 12px; }
+.statrow { display: flex; justify-content: space-between; padding: 3px 0; }
+.stathead { font-size: 11px; color: var(--muted); margin: 8px 0 2px; }
+.metabox {
+  background: #1e2a1e; border: 3px solid #4ade80; padding: 10px 12px;
+  margin: 10px 0; font-size: 12px; line-height: 2;
+}
+.metarow b { color: #4ade80; }
+.difflabel small { display: block; font-size: 9px; color: var(--muted); margin-top: 2px; }

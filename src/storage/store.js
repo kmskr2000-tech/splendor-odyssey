@@ -162,13 +162,18 @@ export function victoryScore({ won, points, turns, difficulty }) {
 
 export function loadRecords(storage) {
   const o = readJSON(storage, RECORDS_KEY);
-  if (!isObj(o)) return { v: 1, best: 0, games: 0, wins: 0, history: [] };
+  if (!isObj(o)) return { v: 1, best: 0, games: 0, wins: 0, history: [], byHero: {}, curStreak: 0, bestStreak: 0, fastestWin: null, mostPoints: null };
   return {
     v: 1,
     best: typeof o.best === 'number' ? o.best : 0,
     games: typeof o.games === 'number' ? o.games : 0,
     wins: typeof o.wins === 'number' ? o.wins : 0,
     history: Array.isArray(o.history) ? o.history.slice(-20) : [],
+    byHero: isObj(o.byHero) ? o.byHero : {},
+    curStreak: Math.max(0, o.curStreak | 0),
+    bestStreak: Math.max(0, o.bestStreak | 0),
+    fastestWin: isObj(o.fastestWin) ? o.fastestWin : null,
+    mostPoints: isObj(o.mostPoints) ? o.mostPoints : null,
   };
 }
 
@@ -178,10 +183,140 @@ export function recordResult(storage, result, now = Date.now()) {
   r.games += 1;
   if (result.won) r.wins += 1;
   r.best = Math.max(r.best, score);
+  // 영웅별 승률
+  if (typeof result.hero === 'string' && result.hero) {
+    const h = r.byHero[result.hero] ?? { games: 0, wins: 0 };
+    h.games += 1;
+    if (result.won) h.wins += 1;
+    r.byHero[result.hero] = h;
+  }
+  // 연승
+  if (result.won) {
+    r.curStreak += 1;
+    r.bestStreak = Math.max(r.bestStreak, r.curStreak);
+    if (!r.fastestWin || result.turns < r.fastestWin.turns) r.fastestWin = { turns: result.turns, date: now };
+  } else {
+    r.curStreak = 0;
+  }
+  // 최고 점수 (승패 무관)
+  if (!r.mostPoints || result.points > r.mostPoints.points) r.mostPoints = { points: result.points, date: now };
   r.history.push({ score, ...result, date: now });
   r.history = r.history.slice(-20);
   writeJSON(storage, RECORDS_KEY, r);
   return { score, isBest: score >= r.best && score > 0 };
+}
+
+// ---------- Hero progression ----------
+// { v:1, heroes: { [name]: { xp, level } } }
+// 레벨은 명예 보상만 (전투력 없음). 칭호·배지·XP바로 표시.
+
+export const HERO_KEY = 'odo-hero-v1';
+export const HERO_XP_LEVELS = [0, 100, 250, 450, 700, 1000, 1400, 1900, 2500, 3200];
+export const HERO_TITLES = { 1: '신입', 3: '수습 영웅', 5: '노련한 영웅', 7: '명성 높은 영웅', 10: '살아있는 전설' };
+export const DIFF_MULT = { easy: 0.8, normal: 1.0, hard: 1.3 };
+const RANK_XP = [100, 60, 30, 20];
+
+export function heroXpFor(rank, difficulty) {
+  return Math.round((RANK_XP[rank - 1] ?? 20) * (DIFF_MULT[difficulty] ?? 1));
+}
+
+export function heroLevelFor(xp) {
+  let level = 1;
+  for (let i = 0; i < HERO_XP_LEVELS.length; i++) if (xp >= HERO_XP_LEVELS[i]) level = i + 1;
+  return level;
+}
+
+export function heroTitleFor(level) {
+  let title = HERO_TITLES[1];
+  for (const [lv, t] of Object.entries(HERO_TITLES)) if (level >= Number(lv)) title = t;
+  return title;
+}
+
+export function loadHero(storage) {
+  const o = readJSON(storage, HERO_KEY);
+  const heroes = {};
+  if (isObj(o) && isObj(o.heroes)) {
+    for (const [name, h] of Object.entries(o.heroes)) {
+      if (isObj(h)) {
+        const xp = Math.max(0, h.xp | 0);
+        heroes[name] = { xp, level: heroLevelFor(xp) };
+      }
+    }
+  }
+  return { v: 1, heroes };
+}
+
+export function getHero(storage, name) {
+  const h = loadHero(storage).heroes[name] ?? { xp: 0, level: 1 };
+  const nextAt = h.level < 10 ? HERO_XP_LEVELS[h.level] : null;
+  const curAt = HERO_XP_LEVELS[h.level - 1];
+  return {
+    xp: h.xp, level: h.level, title: heroTitleFor(h.level),
+    cur: h.xp - curAt, need: nextAt == null ? 0 : nextAt - curAt,
+  };
+}
+
+export function addHeroXP(storage, name, xp) {
+  const h = loadHero(storage);
+  const e = h.heroes[name] ?? { xp: 0, level: 1 };
+  const before = e.level;
+  e.xp += Math.max(0, xp | 0);
+  e.level = heroLevelFor(e.xp);
+  h.heroes[name] = e;
+  writeJSON(storage, HERO_KEY, h);
+  return { xp: e.xp, level: e.level, title: heroTitleFor(e.level), leveledUp: e.level > before, gained: xp };
+}
+
+// ---------- League ----------
+// { v:1, season: "YYYY-MM", points, best: { [season]: tierId }, history: [{ season, tier, points }] }
+// 싱글모드 리그전에서만 가산. 멀티플레이어는 바닐라.
+
+export const LEAGUE_KEY = 'odo-league-v1';
+const RANK_POINTS = [100, 60, 30, 10];
+
+export function leaguePointsFor(rank, difficulty) {
+  return Math.round((RANK_POINTS[rank - 1] ?? 10) * (DIFF_MULT[difficulty] ?? 1));
+}
+
+export function loadLeague(storage, season) {
+  let o = readJSON(storage, LEAGUE_KEY);
+  if (!isObj(o) || o.v !== 1) o = { v: 1, season, points: 0, best: {}, history: [] };
+  let rolled = null;
+  if (o.season !== season && typeof o.season === 'string' && o.season) {
+    // 시즌 롤오버: 최종 티어 기록 후 리셋
+    const prevTier = tierForPoints(o.points | 0);
+    rolled = { season: o.season, tier: prevTier, points: o.points | 0 };
+    o.best[o.season] = prevTier;
+    o.history.push({ season: o.season, tier: prevTier, points: o.points | 0 });
+    o.history = o.history.slice(-12);
+    o.season = season;
+    o.points = 0;
+    writeJSON(storage, LEAGUE_KEY, { v: 1, season: o.season, points: 0, best: o.best, history: o.history });
+  }
+  return {
+    v: 1, season: o.season, points: o.points | 0,
+    best: isObj(o.best) ? o.best : {}, history: Array.isArray(o.history) ? o.history : [],
+    rolled,
+  };
+}
+
+// store.js는 league.js를 import하지 않음 (순환 방지) — 티어 판정은 아래 경량 테이블 사용
+const LEAGUE_TIER_MINS = [
+  ['mortal', 0], ['warrior', 300], ['hero', 700], ['champion', 1200], ['demigod', 1800], ['god', 2500],
+];
+function tierForPoints(points) {
+  let t = 'mortal';
+  for (const [id, min] of LEAGUE_TIER_MINS) if (points >= min) t = id;
+  return t;
+}
+
+export function addLeaguePoints(storage, pts, season) {
+  const l = loadLeague(storage, season);
+  const before = tierForPoints(l.points);
+  l.points += Math.max(0, pts | 0);
+  const after = tierForPoints(l.points);
+  writeJSON(storage, LEAGUE_KEY, { v: 1, season: l.season, points: l.points, best: l.best, history: l.history });
+  return { points: l.points, tier: after, promoted: after !== before };
 }
 
 // ---------- Challenges ----------
@@ -191,8 +326,13 @@ export const CHAL_KEY = 'odo-chal-v1';
 
 export function loadChal(storage) {
   const o = readJSON(storage, CHAL_KEY);
-  if (!isObj(o) || !isObj(o.completed)) return { v: 1, completed: {} };
-  return { v: 1, completed: o.completed };
+  if (!isObj(o)) return { v: 1, completed: {}, streak: { count: 0, last: '' } };
+  const streak = isObj(o.streak) ? o.streak : {};
+  return {
+    v: 1,
+    completed: isObj(o.completed) ? o.completed : {},
+    streak: { count: Math.max(0, streak.count | 0), last: typeof streak.last === 'string' ? streak.last : '' },
+  };
 }
 
 export function completeChal(storage, id, now = Date.now()) {
@@ -203,4 +343,21 @@ export function completeChal(storage, id, now = Date.now()) {
     return true;
   }
   return false;
+}
+
+// 일일 도전 완료 + 연속 클리어 스트릭 (dateStr: 'YYYY-MM-DD')
+// 어제 완료했으면 +1, 오늘이면 유지, 그 외는 1로 리셋
+export function completeDaily(storage, id, dateStr, now = Date.now()) {
+  const c = loadChal(storage);
+  let isNew = false;
+  if (!c.completed[id]) {
+    c.completed[id] = now;
+    isNew = true;
+    const dt = new Date(Number(dateStr.slice(0, 4)), Number(dateStr.slice(5, 7)) - 1, Number(dateStr.slice(8)) - 1);
+    const yesterday = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    c.streak.count = c.streak.last === yesterday ? c.streak.count + 1 : (c.streak.last === dateStr ? c.streak.count : 1);
+    c.streak.last = dateStr;
+  }
+  writeJSON(storage, CHAL_KEY, c);
+  return { isNew, streak: c.streak.count };
 }

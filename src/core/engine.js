@@ -5,8 +5,8 @@ import {
   COLORS, MASTER, TOKEN_KEYS, MASTER_TOTAL, TOKENS_PER_COLOR, MAX_TOKENS, MAX_HAND,
   WIN_POINTS, TIER_KEYS, RESERVABLE_TIER_KEYS, TABLE_SLOTS, SPECIAL_TIER_KEYS, PHASES,
   RULE_CHOICES,
-} from './constants.js?v=1791279718';
-import { nextInt, shuffle } from './rng.js?v=1791279718';
+} from './constants.js?v=1791281681';
+import { nextInt, shuffle } from './rng.js?v=1791281681';
 
 const ok = (state, events) => ({ ok: true, state, events });
 const fail = (error) => ({ ok: false, error });
@@ -53,17 +53,32 @@ function findOnTable(state, cardId) {
   return null;
 }
 
-// Returns payment ({color: n, ..., master: m}) or null when unaffordable.
-export function computePayment(player, card) {
+// 색상별 필요 가호 수 (할인 적용: 가장 많이 필요한 가호부터 차감)
+function colorNeeds(player, card, discount = 0) {
   const bonuses = getBonuses(player);
+  const needs = COLORS.map((c) => Math.max(0, (card.cost[c] || 0) - bonuses[c]));
+  let disc = Math.max(0, discount | 0);
+  const order = needs.map((_, i) => i).sort((a, b) => needs[b] - needs[a]);
+  for (const i of order) {
+    if (disc <= 0) break;
+    const t = Math.min(disc, needs[i]);
+    needs[i] -= t;
+    disc -= t;
+  }
+  return needs;
+}
+
+// Returns payment ({color: n, ..., master: m}) or null when unaffordable.
+// discount: 다이달로스 "명장의 손길" — 가호 1개 할인.
+export function computePayment(player, card, discount = 0) {
+  const needs = colorNeeds(player, card, discount);
   const payment = zeroTokens();
   let deficit = 0;
-  for (const c of COLORS) {
-    const need = Math.max(0, (card.cost[c] || 0) - bonuses[c]);
-    const pay = Math.min(need, player.tokens[c]);
+  COLORS.forEach((c, i) => {
+    const pay = Math.min(needs[i], player.tokens[c]);
     payment[c] = pay;
-    deficit += need - pay;
-  }
+    deficit += needs[i] - pay;
+  });
   payment[MASTER] = deficit + requiredExtraMasters(card);
   return payment[MASTER] <= player.tokens[MASTER] ? payment : null;
 }
@@ -74,9 +89,9 @@ function requiredExtraMasters(card) {
 }
 
 // Validates an explicit payment. Returns error code or null.
-function validatePayment(player, card, payment) {
+function validatePayment(player, card, payment, discount = 0) {
   if (!payment || typeof payment !== 'object') return 'bad_payment';
-  const bonuses = getBonuses(player);
+  const needs = colorNeeds(player, card, discount);
   let deficit = 0;
   for (const k of Object.keys(payment)) {
     if (!TOKEN_KEYS.includes(k)) return 'bad_payment';
@@ -85,11 +100,10 @@ function validatePayment(player, card, payment) {
     const v = payment[k] ?? 0;
     if (!isCount(v) || v > player.tokens[k]) return 'bad_payment';
   }
-  for (const c of COLORS) {
-    const need = Math.max(0, (card.cost[c] || 0) - bonuses[c]);
-    const pay = payment[c] ?? 0;
-    if (pay > need) return 'overpay';
-    deficit += need - pay;
+  for (let i = 0; i < COLORS.length; i++) {
+    const pay = payment[COLORS[i]] ?? 0;
+    if (pay > needs[i]) return 'overpay';
+    deficit += needs[i] - pay;
   }
   const masters = payment[MASTER] ?? 0;
   const expected = deficit + requiredExtraMasters(card);
@@ -147,6 +161,7 @@ export function createGame({ cards, players, seed = 1 }) {
       name: p.name,
       isAI: !!p.isAI,
       tileId: p.tileId ?? i,
+      ability: p.ability ?? null, // 영웅 고유 능력 id (싱글모드 전용, 게임당 1회)
       tokens: zeroTokens(),
       hand: [],
       tableau: [],
@@ -163,6 +178,7 @@ export function createGame({ cards, players, seed = 1 }) {
     passStreak: 0,
     stalled: false,
     ranking: null,
+    abilityUsed: players.map(() => false), // 영웅 능력 사용 여부 (게임당 1회)
   };
 
   for (const c of COLORS) state.supply[c] = state.config.tokensPerColor;
@@ -232,6 +248,24 @@ export function legalActions(state) {
     const payment = computePayment(player, card);
     if (payment) actions.push({ type: 'buy', cardId: card.id, payment });
   }
+  // 영웅 고유 능력 (싱글모드 전용, 게임당 1회)
+  if (player.ability && !state.abilityUsed[state.current]) {
+    if (player.ability === 'refreshRow') {
+      for (const key of TIER_KEYS) {
+        if (state.decks[key].length > 0) actions.push({ type: 'abilityRefresh', tier: key });
+      }
+    } else if (player.ability === 'takeFour') {
+      const available = COLORS.filter((c) => state.supply[c] > 0);
+      if (available.length >= 4) {
+        for (const colors of combinations(available, 4)) actions.push({ type: 'abilityTake', colors });
+      }
+    } else if (player.ability === 'discount' || player.ability === 'masterBonus') {
+      for (const card of buyable) {
+        const payment = computePayment(player, card, player.ability === 'discount' ? 1 : 0);
+        if (payment) actions.push({ type: 'abilityBuy', cardId: card.id, payment, ability: player.ability });
+      }
+    }
+  }
   if (actions.length === 0) actions.push({ type: 'pass' });
   return actions;
 }
@@ -248,6 +282,7 @@ export function applyAction(state, action) {
   const phaseOf = {
     takeBalls: PHASES.ACTION, takeTwo: PHASES.ACTION, reserve: PHASES.ACTION,
     buy: PHASES.ACTION, pass: PHASES.ACTION,
+    abilityBuy: PHASES.ACTION, abilityTake: PHASES.ACTION, abilityRefresh: PHASES.ACTION,
     discard: PHASES.DISCARD,
     evolve: PHASES.EVOLVE, skipEvolve: PHASES.EVOLVE,
   };
@@ -260,6 +295,9 @@ export function applyAction(state, action) {
     case 'takeTwo': error = doTakeTwo(s, player, action, events); break;
     case 'reserve': error = doReserve(s, player, action, events); break;
     case 'buy': error = doBuy(s, player, action, events); break;
+    case 'abilityBuy': error = doAbilityBuy(s, player, action, events); break;
+    case 'abilityTake': error = doAbilityTake(s, player, action, events); break;
+    case 'abilityRefresh': error = doAbilityRefresh(s, player, action, events); break;
     case 'pass': error = doPass(state, s, events); break;
     case 'discard': error = doDiscard(s, player, action, events); break;
     case 'evolve': error = doEvolve(s, player, action, events); break;
@@ -362,6 +400,95 @@ function doBuy(s, player, { cardId, payment }, events) {
   s.passStreak = 0;
   events.push({ type: 'buy', player: s.current, cardId: card.id, payment: { ...pay } });
   afterAction(s, events);
+  return null;
+}
+
+// ---------- hero abilities (single-player only, once per game) ----------
+
+function checkAbility(s, player, abilityId) {
+  if (player.ability !== abilityId) return 'no_ability';
+  if (s.abilityUsed[s.current]) return 'ability_used';
+  return null;
+}
+
+function findBuyCard(s, player, cardId) {
+  const handIdx = player.hand.findIndex((c) => c.id === cardId);
+  if (handIdx >= 0) return { card: player.hand[handIdx], handIdx, found: null };
+  const found = findOnTable(s, cardId);
+  if (!found) return null;
+  return { card: found.card, handIdx: -1, found };
+}
+
+// 다이달로스 "명장의 손길" (가호 1개 할인) / 파트로클로스 "전리품" (암브로시아 1개 추가 획득)
+function doAbilityBuy(s, player, { cardId, payment, ability }, events) {
+  const aerr = checkAbility(s, player, ability);
+  if (aerr) return aerr;
+  if (ability !== 'discount' && ability !== 'masterBonus') return 'bad_ability';
+  const slot = findBuyCard(s, player, cardId);
+  if (!slot) return 'card_not_found';
+  const discount = ability === 'discount' ? 1 : 0;
+  let pay = payment;
+  if (pay === undefined) {
+    pay = computePayment(player, slot.card, discount);
+    if (!pay) return 'cannot_afford';
+  } else {
+    const verr = validatePayment(player, slot.card, pay, discount);
+    if (verr) return verr;
+  }
+  for (const k of TOKEN_KEYS) {
+    const v = pay[k] ?? 0;
+    player.tokens[k] -= v;
+    s.supply[k] += v;
+  }
+  if (slot.handIdx >= 0) player.hand.splice(slot.handIdx, 1);
+  else takeFromTable(s, slot.found.key, slot.found.idx);
+  player.tableau.push(slot.card);
+  s.abilityUsed[s.current] = true;
+  let gotMaster = false;
+  if (ability === 'masterBonus' && s.supply[MASTER] > 0) {
+    s.supply[MASTER] -= 1;
+    player.tokens[MASTER] += 1;
+    gotMaster = true;
+  }
+  s.passStreak = 0;
+  events.push({ type: 'abilityBuy', ability, player: s.current, cardId: slot.card.id, payment: { ...pay }, gotMaster });
+  afterAction(s, events);
+  return null;
+}
+
+// 아가멤논 "약탈" — 가호 4종류 가져오기
+function doAbilityTake(s, player, { colors }, events) {
+  const aerr = checkAbility(s, player, 'takeFour');
+  if (aerr) return aerr;
+  if (!Array.isArray(colors) || colors.length !== 4) return 'bad_colors';
+  if (new Set(colors).size !== 4) return 'duplicate_color';
+  if (colors.some((c) => !COLORS.includes(c))) return 'bad_colors';
+  if (colors.some((c) => s.supply[c] < 1)) return 'supply_empty';
+  for (const c of colors) {
+    s.supply[c] -= 1;
+    player.tokens[c] += 1;
+  }
+  s.abilityUsed[s.current] = true;
+  s.passStreak = 0;
+  events.push({ type: 'abilityTake', player: s.current, colors: [...colors] });
+  afterAction(s, events);
+  return null;
+}
+
+// 네스토르 "지혜" — 진열된 카드 1줄 새로고침 (기존 카드는 덱 아래로)
+function doAbilityRefresh(s, player, { tier }, events) {
+  const aerr = checkAbility(s, player, 'refreshRow');
+  if (aerr) return aerr;
+  const key = String(tier);
+  if (!TIER_KEYS.includes(key)) return 'bad_tier';
+  if (s.decks[key].length === 0) return 'deck_empty';
+  const olds = s.table[key].filter(Boolean);
+  s.decks[key].push(...olds);
+  s.table[key] = s.table[key].map(() => s.decks[key].shift() ?? null);
+  s.abilityUsed[s.current] = true;
+  s.passStreak = 0;
+  events.push({ type: 'abilityRefresh', player: s.current, tier: key });
+  endTurn(s, events);
   return null;
 }
 

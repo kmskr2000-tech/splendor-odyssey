@@ -3,10 +3,10 @@
 // Works in every phase (action / discard / evolve); the UI drives AI turns with it.
 // Turn pacing (0.8s) lives in ui/main.js (AI_DELAY), not here.
 
-import { COLORS, MASTER, TOKEN_KEYS, PHASES, MAX_TOKENS, MAX_HAND, TIER_KEYS } from '../core/constants.js?v=1791279718';
+import { COLORS, MASTER, TOKEN_KEYS, PHASES, MAX_TOKENS, MAX_HAND, TIER_KEYS } from '../core/constants.js?v=1791281681';
 import {
   legalActions, getCurrentPlayer, getBonuses, bonusList, isSpecial, evolveOptions, tokenCount,
-} from '../core/engine.js?v=1791279718';
+} from '../core/engine.js?v=1791281681';
 
 const BASE_JITTER = 0.01; // breaks exact ties so the three AIs do not play identically
 
@@ -144,28 +144,41 @@ function chooseBuy(state, player, legal, rnd, jit, pers) {
 function chooseTake(state, player, legal, target, bonuses, rnd, jit, difficulty, pers) {
   const takes = legal.filter((a) => a.type === 'takeBalls' || a.type === 'takeTwo');
   if (!takes.length) return null;
-  const want = target ? deficits(player, target, bonuses) : Object.fromEntries(COLORS.map((c) => [c, 0]));
-  const demand = demandByColor(state, player, bonuses);
-  const held = tokenCount(player);
-  const opp = (difficulty === 'hard' || pers === 'opportunistic') ? opponentWant(state, state.current) : null;
-  const focus = pers === 'specialized' ? focusColors(state.current) : null;
+  const ctx = takeScoreCtx(state, player, target, bonuses, difficulty, pers);
   let best = null;
   for (const action of takes) {
     const got = action.type === 'takeTwo' ? { [action.color]: 2 } : Object.fromEntries(action.colors.map((c) => [c, 1]));
-    let score = 0;
-    let count = 0;
-    for (const [c, n] of Object.entries(got)) {
-      score += Math.min(n, want[c]) * 10 + demand[c] * 0.1; // target first, other cards as tie-break
-      if (opp) score += Math.min(n, opp[c]) * 0.8; // hard/opportunistic: deny rivals the balls they need
-      if (focus && focus.includes(c)) score += n * 1.5; // specialized: commit to focus colors
-      count += n;
-    }
-    if (action.type === 'takeTwo' && want[action.color] < 2) score -= 3; // two of a color nobody needs
-    score -= Math.max(0, held + count - MAX_TOKENS) * 2; // would force a discard
-    score += rnd() * jit;
+    const score = scoreTakeGot(got, ctx, action.type === 'takeTwo' ? action.color : null, rnd, jit);
     if (!best || score > best.score) best = { action, score };
   }
   return best.action;
+}
+
+// 가호 획득 후보를 점수화하기 위한 공통 컨텍스트
+function takeScoreCtx(state, player, target, bonuses, difficulty, pers) {
+  return {
+    want: target ? deficits(player, target, bonuses) : Object.fromEntries(COLORS.map((c) => [c, 0])),
+    demand: demandByColor(state, player, bonuses),
+    held: tokenCount(player),
+    opp: (difficulty === 'hard' || pers === 'opportunistic') ? opponentWant(state, state.current) : null,
+    focus: pers === 'specialized' ? focusColors(state.current) : null,
+  };
+}
+
+// got: {color: n} 획득 시 점수. takeTwoColor가 있으면 "2개 가져가기" 페널티 규칙 적용.
+function scoreTakeGot(got, ctx, takeTwoColor, rnd, jit) {
+  let score = 0;
+  let count = 0;
+  for (const [c, n] of Object.entries(got)) {
+    score += Math.min(n, ctx.want[c] ?? 0) * 10 + ctx.demand[c] * 0.1; // target first, other cards as tie-break
+    if (ctx.opp) score += Math.min(n, ctx.opp[c]) * 0.8; // hard/opportunistic: deny rivals the balls they need
+    if (ctx.focus && ctx.focus.includes(c)) score += n * 1.5; // specialized: commit to focus colors
+    count += n;
+  }
+  if (takeTwoColor && (ctx.want[takeTwoColor] ?? 0) < 2) score -= 3; // two of a color nobody needs
+  score -= Math.max(0, ctx.held + count - MAX_TOKENS) * 2; // would force a discard
+  score += rnd() * jit;
+  return score;
 }
 
 // Design 3.1-3: reserve only when a master ball is what the (rare / legend) target lacks.
@@ -234,6 +247,57 @@ function chooseDiscard(state, player, count, rnd, jit) {
   return out;
 }
 
+// ---------- hero abilities (single-player only, once per game) ----------
+// 각 영웅의 합리적 사용 타이밍:
+// 다이달로스(할인)=살 수 있는 가장 비싼 카드 / 아가멤논(4종)=가호 부족 시
+// 파트로클로스(암브로시아)=5점+ 카드 영입 시 / 네스토르(새로고침)=살 수 있는 카드가 없을 때
+function chooseAbility(state, player, legal, ability, rnd, jit, difficulty, pers) {
+  if (state.abilityUsed[state.current]) return null;
+  if (ability === 'discount') {
+    const abs = legal.filter((a) => a.type === 'abilityBuy');
+    if (!abs.length) return null;
+    let best = null;
+    for (const a of abs) {
+      const card = cardById(state, player, a.cardId);
+      const cost = COLORS.reduce((s, c) => s + (card.cost[c] || 0), 0);
+      if (!best || cost > best.cost) best = { action: a, cost };
+    }
+    return best.action;
+  }
+  if (ability === 'masterBonus') {
+    const buy = chooseBuy(state, player, legal, rnd, jit, pers);
+    if (!buy) return null;
+    const card = cardById(state, player, buy.cardId);
+    if (card.points < 5) return null;
+    return legal.find((a) => a.type === 'abilityBuy' && a.cardId === buy.cardId) ?? null;
+  }
+  if (ability === 'takeFour') {
+    if (legal.some((a) => a.type === 'buy')) return null; // 가호 부족 시에만
+    const takes = legal.filter((a) => a.type === 'abilityTake');
+    if (!takes.length) return null;
+    const bonuses = getBonuses(player);
+    const target = pickTarget(state, player, bonuses, rnd, jit);
+    const ctx = takeScoreCtx(state, player, target, bonuses, difficulty, pers);
+    let best = null;
+    for (const a of takes) {
+      const got = Object.fromEntries(a.colors.map((c) => [c, 1]));
+      const score = scoreTakeGot(got, ctx, null, rnd, jit);
+      if (!best || score > best.score) best = { action: a, score };
+    }
+    return best.action;
+  }
+  if (ability === 'refreshRow') {
+    if (legal.some((a) => a.type === 'buy')) return null; // 살 수 있는 카드가 없을 때만
+    const refs = legal.filter((a) => a.type === 'abilityRefresh');
+    if (!refs.length) return null;
+    const bonuses = getBonuses(player);
+    const target = pickTarget(state, player, bonuses, rnd, jit);
+    const want = target ? refs.find((a) => a.tier === String(target.tier)) : null;
+    return want ?? refs[0];
+  }
+  return null;
+}
+
 export function chooseAction(state, rnd = Math.random, difficulty = 'normal', personality = 'random') {
   const jit = difficulty === 'easy' ? 2.0 : difficulty === 'hard' ? 0 : BASE_JITTER;
   const pers = resolvePersonality(state, personality);
@@ -242,6 +306,11 @@ export function chooseAction(state, rnd = Math.random, difficulty = 'normal', pe
 
   if (state.phase === PHASES.DISCARD) return { type: 'discard', tokens: chooseDiscard(state, player, legal[0].count, rnd, jit) };
   if (state.phase === PHASES.EVOLVE) return chooseEvolve(state, player, legal, difficulty, rnd);
+
+  if (player.ability) {
+    const ab = chooseAbility(state, player, legal, player.ability, rnd, jit, difficulty, pers);
+    if (ab) return ab;
+  }
 
   const buy = chooseBuy(state, player, legal, rnd, jit, pers);
   if (buy) return buy;
