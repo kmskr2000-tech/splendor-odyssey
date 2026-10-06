@@ -12,6 +12,15 @@ on:
         description: '앱 이름 (Play 표시명)'
         required: true
         default: 'Odyssey: The Card'
+  # 게임 파일이 바뀌면 자동으로 AAB 빌드
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'src/**'
+      - 'css/**'
+      - 'assets/**'
+      - 'packaging/android-build.sh'
 
 jobs:
   build:
